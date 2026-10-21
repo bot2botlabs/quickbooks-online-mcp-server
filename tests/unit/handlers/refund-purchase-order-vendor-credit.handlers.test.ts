@@ -78,19 +78,29 @@ describe('Refund, PurchaseOrder, VendorCredit Handlers', () => {
       expect(payload.GlobalTaxCalculation).toBe('TaxExcluded');
     });
 
+    it('should reject a non-numeric class_ref before calling QuickBooks', async () => {
+      const result = await createQuickbooksRefundReceipt({
+        customer_ref: 'cust-1',
+        line_items: [{ item_ref: 'item-1', qty: 1, unit_price: 1, class_ref: 'Restoration' }],
+      });
+
+      expect(result.isError).toBe(true);
+      expect(mockQuickBooksInstance.createRefundReceipt).not.toHaveBeenCalled();
+    });
+
     it('should pass per-line ClassRef to QuickBooks when class_ref is given', async () => {
       mockQuickBooksInstance.createRefundReceipt.mockImplementation((payload: any, cb: any) => cb(null, { Id: '1' }));
 
       await createQuickbooksRefundReceipt({
         customer_ref: 'cust-1',
         line_items: [
-          { item_ref: 'item-1', qty: 1, unit_price: 100, class_ref: 'class-7' },
+          { item_ref: 'item-1', qty: 1, unit_price: 100, class_ref: '682828' },
           { item_ref: 'item-2', qty: 1, unit_price: 50 },
         ],
       });
 
       const payload = (mockQuickBooksInstance.createRefundReceipt.mock.calls[0] as any)[0];
-      expect(payload.Line[0].SalesItemLineDetail.ClassRef).toEqual({ value: 'class-7' });
+      expect(payload.Line[0].SalesItemLineDetail.ClassRef).toEqual({ value: '682828' });
       expect(payload.Line[1].SalesItemLineDetail.ClassRef).toBeUndefined();
     });
 

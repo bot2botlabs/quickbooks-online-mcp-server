@@ -1,6 +1,7 @@
 import { QuickbooksClient } from "../clients/quickbooks-client.js";
 import { ToolResponse } from "../types/tool-response.js";
 import { formatError } from "../helpers/format-error.js";
+import { formatSalesCreateError, validateLineClassRefs } from "../helpers/sales-line-class-ref.js";
 
 export interface CreateRefundReceiptInput {
   customer_ref: string;
@@ -22,6 +23,11 @@ export interface CreateRefundReceiptInput {
 
 export async function createQuickbooksRefundReceipt(data: CreateRefundReceiptInput): Promise<ToolResponse<any>> {
   try {
+    const classRefError = validateLineClassRefs(data.line_items);
+    if (classRefError) {
+      return { result: null, isError: true, error: classRefError };
+    }
+
     const quickbooks = await QuickbooksClient.getInstance();
 
     const refundReceiptPayload: any = {
@@ -62,9 +68,13 @@ export async function createQuickbooksRefundReceipt(data: CreateRefundReceiptInp
     }
 
     return new Promise((resolve) => {
-      (quickbooks as any).createRefundReceipt(refundReceiptPayload, (err: any, created: any) => {
+      (quickbooks as any).createRefundReceipt(refundReceiptPayload, async (err: any, created: any) => {
         if (err) {
-          resolve({ result: null, isError: true, error: formatError(err) });
+          resolve({
+            result: null,
+            isError: true,
+            error: await formatSalesCreateError(quickbooks, err, data.line_items),
+          });
         } else {
           resolve({ result: created, isError: false, error: null });
         }

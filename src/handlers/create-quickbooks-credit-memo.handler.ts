@@ -1,6 +1,7 @@
 import { QuickbooksClient } from "../clients/quickbooks-client.js";
 import { ToolResponse } from "../types/tool-response.js";
 import { formatError } from "../helpers/format-error.js";
+import { formatSalesCreateError, validateLineClassRefs } from "../helpers/sales-line-class-ref.js";
 
 export interface CreateCreditMemoInput {
   customer_ref: string;
@@ -20,6 +21,11 @@ export interface CreateCreditMemoInput {
 
 export async function createQuickbooksCreditMemo(data: CreateCreditMemoInput): Promise<ToolResponse<any>> {
   try {
+    const classRefError = validateLineClassRefs(data.line_items);
+    if (classRefError) {
+      return { result: null, isError: true, error: classRefError };
+    }
+
     const quickbooks = await QuickbooksClient.getInstance();
 
     const creditMemoPayload: any = {
@@ -54,9 +60,13 @@ export async function createQuickbooksCreditMemo(data: CreateCreditMemoInput): P
     }
 
     return new Promise((resolve) => {
-      (quickbooks as any).createCreditMemo(creditMemoPayload, (err: any, created: any) => {
+      (quickbooks as any).createCreditMemo(creditMemoPayload, async (err: any, created: any) => {
         if (err) {
-          resolve({ result: null, isError: true, error: formatError(err) });
+          resolve({
+            result: null,
+            isError: true,
+            error: await formatSalesCreateError(quickbooks, err, data.line_items),
+          });
         } else {
           resolve({ result: created, isError: false, error: null });
         }

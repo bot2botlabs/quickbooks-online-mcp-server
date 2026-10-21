@@ -73,10 +73,10 @@ describe('Create Invoice Handler - template fields', () => {
 
     await createQuickbooksInvoice({
       customer_ref: '42',
-      line_items: [{ item_ref: '1', qty: 1, unit_price: 100, class_ref: 'class-7' }],
+      line_items: [{ item_ref: '1', qty: 1, unit_price: 100, class_ref: '682828' }],
     });
 
     const payload = mockQuickBooksInstance.createInvoice.mock.calls[0][0] as any;
-    expect(payload.Line[0].SalesItemLineDetail.ClassRef).toEqual({ value: 'class-7' });
+    expect(payload.Line[0].SalesItemLineDetail.ClassRef).toEqual({ value: '682828' });
   });
 });
