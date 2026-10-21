@@ -323,6 +323,14 @@ If upgrading from the original Intuit implementation:
 
 ## [Unreleased]
 
+### Added
+
+- Safe line-level updates for sales transactions (#141)
+  - Optional `line_items` on `update_invoice`, `update_estimate`, `update_credit_memo`, `update_sales_receipt`, and `update_refund_receipt` to add, edit, or remove individual lines by Id without replacing the entire `Line` array
+  - `replace_all_lines` when using raw `patch.Line` or `estimate.Line`, so a partial caller `Line` array cannot reach QuickBooks unless replacement is explicit
+  - Header-only `update_invoice` patches no longer resend the full existing `Line` array on sparse updates
+  - Reject stale caller `SyncToken` or `sync_token` (after a fresh read) before any write, matching the other sales update tools
+
 ### Planned
 
 - Integration tests with QuickBooks sandbox
