@@ -16,9 +16,9 @@
         "lint:fix": "eslint --fix",
         "lint": "eslint .",
         "auth": "node dist/auth-server.js",
-        "manifest:sync": "node scripts/manifest-sync.mjs",
-        "manifest:check": "node scripts/manifest-sync.mjs --check",
-        "bundle": "npm run build && npm run manifest:check && node scripts/build-bundle.mjs",
+        "manifest:sync": "npm run build && node dist/mcpb/manifest-sync.js",
+        "manifest:check": "node dist/mcpb/manifest-sync.js --check",
+        "bundle": "npm run build && npm run manifest:check && node dist/mcpb/build-bundle.js",
         "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
         "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
         "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage"
