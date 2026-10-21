@@ -70,6 +70,12 @@ describe('sales-line-update helper', () => {
         Id: '1',
         SyncToken: '2',
       });
+      expect(
+        normalizeLegacyEstimateOnlyPayload({ Id: '1', SyncToken: '2', sync_token: '9' })
+      ).toEqual({
+        Id: '1',
+        SyncToken: '2',
+      });
       expect(normalizeLegacyEstimateOnlyPayload({ Id: '1', PrivateNote: 'x' })).toEqual({
         Id: '1',
         PrivateNote: 'x',

@@ -147,15 +147,18 @@ export function legacyLineUpdateBodyFromRecord(record: Record<string, any>): Rec
   return stripSparseControlFieldsExceptLine(record);
 }
 
-/** Estimate-only update: map lone sync_token to SyncToken for QuickBooks. */
+/** Estimate-only update: never send sync_token; map it to SyncToken when SyncToken is absent. */
 export function normalizeLegacyEstimateOnlyPayload(estimateData: any): any {
   if (!estimateData || typeof estimateData !== "object") {
     return estimateData;
   }
-  if (estimateData.SyncToken !== undefined || estimateData.sync_token === undefined) {
+  if (estimateData.sync_token === undefined) {
     return estimateData;
   }
   const { sync_token, ...rest } = estimateData;
+  if (rest.SyncToken !== undefined) {
+    return rest;
+  }
   return { ...rest, SyncToken: sync_token };
 }
 

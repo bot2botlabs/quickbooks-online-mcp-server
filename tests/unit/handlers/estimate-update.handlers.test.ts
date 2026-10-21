@@ -129,6 +129,17 @@ describe('updateQuickbooksEstimate line_items (#141)', () => {
     expect(sent.SyncToken).toBe('2');
   });
 
+  it('legacy estimate-only payload drops sync_token when SyncToken is also present', async () => {
+    let sent: any;
+    mockQuickBooksInstance.updateEstimate.mockImplementation((payload: any, cb: any) => {
+      sent = payload;
+      cb(null, payload);
+    });
+    await updateQuickbooksEstimate({ Id: 'est-1', SyncToken: '2', sync_token: '2', PrivateNote: 'both' });
+    expect(sent.SyncToken).toBe('2');
+    expect(sent).not.toHaveProperty('sync_token');
+  });
+
   it('legacy estimate-only payload maps sync_token to SyncToken', async () => {
     let sent: any;
     mockQuickBooksInstance.updateEstimate.mockImplementation((payload: any, cb: any) => {
