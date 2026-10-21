@@ -77,6 +77,59 @@ describe('updateQuickbooksInvoice line_items (#141)', () => {
     expect(complete.isError).toBe(false);
   });
 
+  it('patch.Line with matching sync_token omits sync_token and uses server SyncToken', async () => {
+    mockQuickBooksInstance.getInvoice.mockImplementation((_id: any, cb: any) => cb(null, currentInvoice));
+    let sent: any;
+    mockQuickBooksInstance.updateInvoice.mockImplementation((payload: any, cb: any) => {
+      sent = payload;
+      cb(null, payload);
+    });
+    await updateQuickbooksInvoice({
+      invoice_id: 'inv-1',
+      patch: { sync_token: '3', Line: [line('1'), line('2')] },
+    });
+    expect(sent.sync_token).toBeUndefined();
+    expect(sent.SyncToken).toBe('3');
+    expect(sent.sparse).toBe(true);
+    expect(sent.Line).toHaveLength(2);
+    expect(mockQuickBooksInstance.updateInvoice).toHaveBeenCalledTimes(1);
+  });
+
+  it('partial patch.Line with replace_all_lines strips matching sync_token', async () => {
+    mockQuickBooksInstance.getInvoice.mockImplementation((_id: any, cb: any) => cb(null, currentInvoice));
+    let sent: any;
+    mockQuickBooksInstance.updateInvoice.mockImplementation((payload: any, cb: any) => {
+      sent = payload;
+      cb(null, payload);
+    });
+    await updateQuickbooksInvoice({
+      invoice_id: 'inv-1',
+      patch: { sync_token: '3', Line: [line('1')] },
+      replace_all_lines: true,
+    });
+    expect(sent).not.toHaveProperty('sync_token');
+    expect(sent.SyncToken).toBe('3');
+    expect(sent.Line).toHaveLength(1);
+  });
+
+  it('stale sync token on patch.Line path skips update', async () => {
+    mockQuickBooksInstance.getInvoice.mockImplementation((_id: any, cb: any) => cb(null, currentInvoice));
+    mockQuickBooksInstance.updateInvoice.mockClear();
+
+    const staleCamel = await updateQuickbooksInvoice({
+      invoice_id: 'inv-1',
+      patch: { SyncToken: '0', Line: [line('1'), line('2')] },
+    });
+    expect(staleCamel.isError).toBe(true);
+
+    const staleSnake = await updateQuickbooksInvoice({
+      invoice_id: 'inv-1',
+      patch: { sync_token: '0', Line: [line('1'), line('2')] },
+    });
+    expect(staleSnake.isError).toBe(true);
+    expect(mockQuickBooksInstance.updateInvoice).not.toHaveBeenCalled();
+  });
+
   it('rejects patch.Line with line_items', async () => {
     mockQuickBooksInstance.getInvoice.mockImplementation((_id: any, cb: any) => cb(null, currentInvoice));
     const result = await updateQuickbooksInvoice({

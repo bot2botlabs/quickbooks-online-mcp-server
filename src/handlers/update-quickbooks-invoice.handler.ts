@@ -4,6 +4,7 @@ import { formatError } from "../helpers/format-error.js";
 import {
   buildMergedLines,
   evaluateSalesLinePostWrite,
+  legacyLineUpdateBodyFromRecord,
   sparseUpdateBodyFromRecord,
   staleSyncTokenIfCallerMismatch,
   validatePatchEntityId,
@@ -95,7 +96,14 @@ export async function updateQuickbooksInvoice(input: UpdateInvoiceInput): Promis
         return { result: null, isError: true, error: patchLineError };
       }
 
-      const updatePayload = { ...existing, ...patch, Id: invoice_id, sparse: true };
+      const patchBody = legacyLineUpdateBodyFromRecord(patch);
+      const updatePayload = {
+        ...existing,
+        ...patchBody,
+        SyncToken: existing.SyncToken,
+        Id: invoice_id,
+        sparse: true,
+      };
 
       return new Promise((resolve) => {
         (quickbooks as any).updateInvoice(updatePayload, (err: any, updated: any) => {

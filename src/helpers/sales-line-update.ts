@@ -131,17 +131,32 @@ function validateEditedLineAmount(line: any, item: SalesLineItemInput, lineId: s
   return null;
 }
 
+function stripSparseControlFieldsExceptLine(record: Record<string, any>): Record<string, any> {
+  const { Id: _id, SyncToken: _sync, sync_token: _syncSnake, sparse: _sparse, ...rest } = record;
+  return rest;
+}
+
 /** Strip fields that must not be taken from caller patch/header bodies on sparse updates. */
 export function sparseUpdateBodyFromRecord(record: Record<string, any>): Record<string, any> {
-  const {
-    Id: _id,
-    SyncToken: _sync,
-    sync_token: _syncSnake,
-    sparse: _sparse,
-    Line: _line,
-    ...rest
-  } = record;
+  const { Line: _line, ...rest } = stripSparseControlFieldsExceptLine(record);
   return rest;
+}
+
+/** Legacy patch.Line / estimate.Line paths: keep Line, drop Id/SyncToken/sync_token/sparse from caller body. */
+export function legacyLineUpdateBodyFromRecord(record: Record<string, any>): Record<string, any> {
+  return stripSparseControlFieldsExceptLine(record);
+}
+
+/** Estimate-only update: map lone sync_token to SyncToken for QuickBooks. */
+export function normalizeLegacyEstimateOnlyPayload(estimateData: any): any {
+  if (!estimateData || typeof estimateData !== "object") {
+    return estimateData;
+  }
+  if (estimateData.SyncToken !== undefined || estimateData.sync_token === undefined) {
+    return estimateData;
+  }
+  const { sync_token, ...rest } = estimateData;
+  return { ...rest, SyncToken: sync_token };
 }
 
 export function validatePatchEntityId(

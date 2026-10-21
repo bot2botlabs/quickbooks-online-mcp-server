@@ -98,12 +98,62 @@ describe('updateQuickbooksEstimate line_items (#141)', () => {
     expect(mockQuickBooksInstance.updateEstimate).not.toHaveBeenCalled();
   });
 
+  it('estimate.Line with matching sync_token strips sync_token from payload', async () => {
+    mockQuickBooksInstance.getEstimate.mockImplementation((_id: any, cb: any) => cb(null, current));
+    let sent: any;
+    mockQuickBooksInstance.updateEstimate.mockImplementation((payload: any, cb: any) => {
+      sent = payload;
+      cb(null, payload);
+    });
+    await updateQuickbooksEstimate({
+      estimate: { Id: 'est-1', sync_token: '2', Line: [line('1'), line('2')] },
+    });
+    expect(sent).not.toHaveProperty('sync_token');
+    expect(sent.SyncToken).toBe('2');
+    expect(sent.sparse).toBe(true);
+    expect(sent.Line).toHaveLength(2);
+  });
+
+  it('estimate.Line partial with replace_all_lines strips sync_token', async () => {
+    mockQuickBooksInstance.getEstimate.mockImplementation((_id: any, cb: any) => cb(null, current));
+    let sent: any;
+    mockQuickBooksInstance.updateEstimate.mockImplementation((payload: any, cb: any) => {
+      sent = payload;
+      cb(null, payload);
+    });
+    await updateQuickbooksEstimate({
+      estimate: { Id: 'est-1', sync_token: '2', Line: [line('1')] },
+      replace_all_lines: true,
+    });
+    expect(sent).not.toHaveProperty('sync_token');
+    expect(sent.SyncToken).toBe('2');
+  });
+
+  it('legacy estimate-only payload maps sync_token to SyncToken', async () => {
+    let sent: any;
+    mockQuickBooksInstance.updateEstimate.mockImplementation((payload: any, cb: any) => {
+      sent = payload;
+      cb(null, payload);
+    });
+    await updateQuickbooksEstimate({ Id: 'est-1', sync_token: '2', PrivateNote: 'legacy' });
+    expect(sent.SyncToken).toBe('2');
+    expect(sent).not.toHaveProperty('sync_token');
+    expect(sent.PrivateNote).toBe('legacy');
+  });
+
   it('stale SyncToken blocks estimate.Line write', async () => {
     mockQuickBooksInstance.getEstimate.mockImplementation((_id: any, cb: any) => cb(null, current));
     const result = await updateQuickbooksEstimate({
       estimate: { Id: 'est-1', SyncToken: '0', Line: [line('1'), line('2')] },
     });
     expect(result.isError).toBe(true);
+    expect(mockQuickBooksInstance.updateEstimate).not.toHaveBeenCalled();
+
+    mockQuickBooksInstance.updateEstimate.mockClear();
+    const staleSnake = await updateQuickbooksEstimate({
+      estimate: { Id: 'est-1', sync_token: '0', Line: [line('1'), line('2')] },
+    });
+    expect(staleSnake.isError).toBe(true);
     expect(mockQuickBooksInstance.updateEstimate).not.toHaveBeenCalled();
   });
 

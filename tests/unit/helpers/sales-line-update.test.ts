@@ -7,6 +7,8 @@ import {
   isAutomatedSalesTax,
   salesLineItemSchema,
   sparseUpdateBodyFromRecord,
+  legacyLineUpdateBodyFromRecord,
+  normalizeLegacyEstimateOnlyPayload,
   validatePatchEntityId,
   validatePatchLineAgainstCurrent,
   staleSyncTokenMessage,
@@ -47,6 +49,32 @@ describe('sales-line-update helper', () => {
       });
       expect(validatePatchEntityId('inv-1', 'inv-1', 'patch')).toBeNull();
       expect(validatePatchEntityId('other', 'inv-1', 'patch')).toContain('must match');
+    });
+
+    it('legacyLineUpdateBodyFromRecord keeps Line and strips sync_token', () => {
+      expect(
+        legacyLineUpdateBodyFromRecord({
+          sync_token: '2',
+          Line: [{ Id: '1' }],
+          PrivateNote: 'n',
+        })
+      ).toEqual({ Line: [{ Id: '1' }], PrivateNote: 'n' });
+    });
+
+    it('normalizeLegacyEstimateOnlyPayload maps sync_token to SyncToken', () => {
+      expect(normalizeLegacyEstimateOnlyPayload({ Id: '1', sync_token: '2' })).toEqual({
+        Id: '1',
+        SyncToken: '2',
+      });
+      expect(normalizeLegacyEstimateOnlyPayload({ Id: '1', SyncToken: '2' })).toEqual({
+        Id: '1',
+        SyncToken: '2',
+      });
+      expect(normalizeLegacyEstimateOnlyPayload({ Id: '1', PrivateNote: 'x' })).toEqual({
+        Id: '1',
+        PrivateNote: 'x',
+      });
+      expect(normalizeLegacyEstimateOnlyPayload(null)).toBeNull();
     });
   });
 

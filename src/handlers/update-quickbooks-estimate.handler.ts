@@ -4,6 +4,8 @@ import { formatError } from "../helpers/format-error.js";
 import {
   buildMergedLines,
   evaluateSalesLinePostWrite,
+  legacyLineUpdateBodyFromRecord,
+  normalizeLegacyEstimateOnlyPayload,
   sparseUpdateBodyFromRecord,
   staleSyncTokenIfCallerMismatch,
   validatePatchLineAgainstCurrent,
@@ -108,7 +110,14 @@ export async function updateQuickbooksEstimate(input: UpdateEstimateInput | any)
         return { result: null, isError: true, error: patchLineError.replace("patch.Line", "estimate.Line") };
       }
 
-      const updatePayload = { ...current, ...estimateData, sparse: true };
+      const estimateBody = legacyLineUpdateBodyFromRecord(estimateData);
+      const updatePayload = {
+        ...current,
+        ...estimateBody,
+        SyncToken: current.SyncToken,
+        Id: estimateData.Id,
+        sparse: true,
+      };
 
       return new Promise((resolve) => {
         quickbooks.updateEstimate(updatePayload, (err: any, estimate: any) => {
@@ -121,8 +130,10 @@ export async function updateQuickbooksEstimate(input: UpdateEstimateInput | any)
       });
     }
 
+    const legacyPayload = normalizeLegacyEstimateOnlyPayload(estimateData);
+
     return new Promise((resolve) => {
-      quickbooks.updateEstimate(estimateData, (err: any, estimate: any) => {
+      quickbooks.updateEstimate(legacyPayload, (err: any, estimate: any) => {
         if (err) {
           resolve({
             result: null,
