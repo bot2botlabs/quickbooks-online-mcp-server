@@ -61,6 +61,22 @@ describe('updateQuickbooksEstimate line_items (#141)', () => {
     expect(result.isError).toBe(false);
   });
 
+  it('strips sync_token from estimate body on line_items write', async () => {
+    mockQuickBooksInstance.getEstimate.mockImplementation((_id: any, cb: any) => cb(null, current));
+    mockQuickBooksInstance.getPreferences.mockImplementation((cb: any) => cb(null, {}));
+    let sent: any;
+    mockQuickBooksInstance.updateEstimate.mockImplementation((payload: any, cb: any) => {
+      sent = payload;
+      cb(null, payload);
+    });
+    await updateQuickbooksEstimate({
+      estimate: { Id: 'est-1', sync_token: '2', PrivateNote: 'n' },
+      line_items: [{ id: '1', qty: 1 }],
+    });
+    expect(sent.SyncToken).toBe('2');
+    expect(sent).not.toHaveProperty('sync_token');
+  });
+
   it('matching SyncToken allows line_items write', async () => {
     mockQuickBooksInstance.getEstimate.mockImplementation((_id: any, cb: any) => cb(null, current));
     mockQuickBooksInstance.getPreferences.mockImplementation((cb: any) => cb(null, {}));

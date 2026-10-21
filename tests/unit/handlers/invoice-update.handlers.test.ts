@@ -273,6 +273,21 @@ describe('updateQuickbooksInvoice line_items (#141)', () => {
     expect(mockQuickBooksInstance.updateInvoice).toHaveBeenCalled();
   });
 
+  it('strips sync_token from patch body and sends only server SyncToken', async () => {
+    mockQuickBooksInstance.getInvoice.mockImplementation((_id: any, cb: any) => cb(null, currentInvoice));
+    let sent: any;
+    mockQuickBooksInstance.updateInvoice.mockImplementation((payload: any, cb: any) => {
+      sent = payload;
+      cb(null, payload);
+    });
+    await updateQuickbooksInvoice({
+      invoice_id: 'inv-1',
+      patch: { sync_token: '3', PrivateNote: 'ok' },
+    });
+    expect(sent.SyncToken).toBe('3');
+    expect(sent).not.toHaveProperty('sync_token');
+  });
+
   it('rejects stale patch.sync_token on line_items path', async () => {
     mockQuickBooksInstance.getInvoice.mockImplementation((_id: any, cb: any) => cb(null, currentInvoice));
     const result = await updateQuickbooksInvoice({

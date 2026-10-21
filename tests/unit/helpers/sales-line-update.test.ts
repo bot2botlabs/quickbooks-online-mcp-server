@@ -34,7 +34,15 @@ const salesLine = (id: string, overrides: Record<string, unknown> = {}) => ({
 describe('sales-line-update helper', () => {
   describe('sparseUpdateBodyFromRecord and validatePatchEntityId', () => {
     it('strips sparse control fields and validates matching Id', () => {
-      expect(sparseUpdateBodyFromRecord({ Id: '1', SyncToken: '2', sparse: false, PrivateNote: 'x' })).toEqual({
+      expect(
+        sparseUpdateBodyFromRecord({
+          Id: '1',
+          SyncToken: '2',
+          sync_token: '2',
+          sparse: false,
+          PrivateNote: 'x',
+        })
+      ).toEqual({
         PrivateNote: 'x',
       });
       expect(validatePatchEntityId('inv-1', 'inv-1', 'patch')).toBeNull();

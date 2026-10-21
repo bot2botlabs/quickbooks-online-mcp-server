@@ -133,7 +133,14 @@ function validateEditedLineAmount(line: any, item: SalesLineItemInput, lineId: s
 
 /** Strip fields that must not be taken from caller patch/header bodies on sparse updates. */
 export function sparseUpdateBodyFromRecord(record: Record<string, any>): Record<string, any> {
-  const { Id: _id, SyncToken: _sync, sparse: _sparse, Line: _line, ...rest } = record;
+  const {
+    Id: _id,
+    SyncToken: _sync,
+    sync_token: _syncSnake,
+    sparse: _sparse,
+    Line: _line,
+    ...rest
+  } = record;
   return rest;
 }
 
