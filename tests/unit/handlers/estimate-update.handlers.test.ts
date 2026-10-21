@@ -219,6 +219,22 @@ describe('updateQuickbooksEstimate line_items (#141)', () => {
     expect(result.isError).toBe(false);
   });
 
+  it('line_items ignores estimate.sparse:false in payload', async () => {
+    mockQuickBooksInstance.getEstimate.mockImplementation((_id: any, cb: any) => cb(null, current));
+    let sent: any;
+    mockQuickBooksInstance.updateEstimate.mockImplementation((payload: any, cb: any) => {
+      sent = payload;
+      cb(null, payload);
+    });
+    await updateQuickbooksEstimate({
+      estimate: { Id: 'est-1', SyncToken: '2', sparse: false, PrivateNote: 'n' },
+      line_items: [{ id: '1', qty: 1 }],
+    });
+    expect(sent.Id).toBe('est-1');
+    expect(sent.sparse).toBe(true);
+    expect(sent.PrivateNote).toBe('n');
+  });
+
   it('estimate.Line and legacy update API errors', async () => {
     mockQuickBooksInstance.getEstimate.mockImplementation((_id: any, cb: any) => cb(null, current));
     mockQuickBooksInstance.updateEstimate.mockImplementation((_p: any, cb: any) => cb(new Error('fail'), null));

@@ -253,6 +253,50 @@ describe('updateQuickbooksInvoice line_items (#141)', () => {
     expect(result.isError).toBe(false);
   });
 
+  it('rejects patch.Id that differs from invoice_id before any write', async () => {
+    const result = await updateQuickbooksInvoice({
+      invoice_id: 'inv-1',
+      patch: { Id: 'other-inv', PrivateNote: 'x' },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.error).toContain('must match');
+    expect(mockQuickBooksInstance.getInvoice).not.toHaveBeenCalled();
+  });
+
+  it('header-only patch ignores sparse:false and keeps Id and sparse:true', async () => {
+    mockQuickBooksInstance.getInvoice.mockImplementation((_id: any, cb: any) => cb(null, currentInvoice));
+    let sent: any;
+    mockQuickBooksInstance.updateInvoice.mockImplementation((payload: any, cb: any) => {
+      sent = payload;
+      cb(null, payload);
+    });
+    await updateQuickbooksInvoice({
+      invoice_id: 'inv-1',
+      patch: { sparse: false, PrivateNote: 'safe' },
+    });
+    expect(sent.Id).toBe('inv-1');
+    expect(sent.sparse).toBe(true);
+    expect(sent.PrivateNote).toBe('safe');
+  });
+
+  it('line_items patch ignores sparse:false override in patch body', async () => {
+    mockQuickBooksInstance.getInvoice.mockImplementation((_id: any, cb: any) => cb(null, currentInvoice));
+    let sent: any;
+    mockQuickBooksInstance.updateInvoice.mockImplementation((payload: any, cb: any) => {
+      sent = payload;
+      cb(null, payload);
+    });
+    await updateQuickbooksInvoice({
+      invoice_id: 'inv-1',
+      patch: { sparse: false, PrivateNote: 'hdr' },
+      line_items: [{ id: '1', qty: 3 }],
+    });
+    expect(sent.Id).toBe('inv-1');
+    expect(sent.sparse).toBe(true);
+    expect(sent.Line.length).toBe(2);
+    expect(mockQuickBooksInstance.updateInvoice).toHaveBeenCalled();
+  });
+
   it('handles update errors on patch.Line and header-only paths', async () => {
     mockQuickBooksInstance.getInvoice.mockImplementation((_id: any, cb: any) => cb(null, currentInvoice));
     mockQuickBooksInstance.updateInvoice.mockImplementation((_p: any, cb: any) => cb(new Error('patch fail'), null));

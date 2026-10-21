@@ -4,6 +4,8 @@ import { formatError } from "../helpers/format-error.js";
 import {
   buildMergedLines,
   evaluateSalesLinePostWrite,
+  sparseUpdateBodyFromRecord,
+  validatePatchEntityId,
   validatePatchLineAgainstCurrent,
   type SalesLineItemInput,
 } from "../helpers/sales-line-update.js";
@@ -21,6 +23,11 @@ export async function updateQuickbooksInvoice(input: UpdateInvoiceInput): Promis
   const patch = input.patch ?? {};
   try {
     const quickbooks = await QuickbooksClient.getInstance();
+
+    const patchIdError = validatePatchEntityId(patch.Id, invoice_id, "patch");
+    if (patchIdError) {
+      return { result: null, isError: true, error: patchIdError };
+    }
 
     const existing: any = await new Promise((res, rej) => {
       (quickbooks as any).getInvoice(invoice_id, (e: any, inv: any) => (e ? rej(e) : res(inv)));
@@ -45,12 +52,12 @@ export async function updateQuickbooksInvoice(input: UpdateInvoiceInput): Promis
         return { result: null, isError: true, error: merged.error };
       }
 
-      const { Line: _dropLine, ...patchWithoutLine } = patch;
+      const patchBody = sparseUpdateBodyFromRecord(patch);
       const updatePayload = {
+        ...patchBody,
         Id: invoice_id,
         SyncToken: existing.SyncToken,
         sparse: true,
-        ...patchWithoutLine,
         Line: merged.lines,
       };
 
@@ -95,11 +102,12 @@ export async function updateQuickbooksInvoice(input: UpdateInvoiceInput): Promis
       });
     }
 
+    const patchBody = sparseUpdateBodyFromRecord(patch);
     const updatePayload = {
+      ...patchBody,
       Id: invoice_id,
       SyncToken: existing.SyncToken,
       sparse: true,
-      ...patch,
     };
 
     return new Promise((resolve) => {

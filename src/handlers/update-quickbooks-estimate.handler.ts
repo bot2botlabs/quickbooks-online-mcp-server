@@ -4,6 +4,7 @@ import { formatError } from "../helpers/format-error.js";
 import {
   buildMergedLines,
   evaluateSalesLinePostWrite,
+  sparseUpdateBodyFromRecord,
   validatePatchLineAgainstCurrent,
   type SalesLineItemInput,
 } from "../helpers/sales-line-update.js";
@@ -66,12 +67,12 @@ export async function updateQuickbooksEstimate(input: UpdateEstimateInput | any)
         return { result: null, isError: true, error: merged.error };
       }
 
-      const { Line: _dropLine, ...estimateWithoutLine } = estimateData;
+      const estimateBody = sparseUpdateBodyFromRecord(estimateData);
       const updatePayload = {
+        ...estimateBody,
         Id: estimateData.Id,
         SyncToken: current.SyncToken,
         sparse: true,
-        ...estimateWithoutLine,
         Line: merged.lines,
       };
 

@@ -9,7 +9,7 @@ const toolDescription =
 
 const toolSchema = z.object({
   invoice_id: z.string().min(1),
-  patch: z.record(z.any()),
+  patch: z.record(z.any()).optional(),
   line_items: z.array(salesLineItemSchema).optional(),
   replace_all_lines: z
     .boolean()

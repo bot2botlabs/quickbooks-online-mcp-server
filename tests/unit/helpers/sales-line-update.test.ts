@@ -6,6 +6,8 @@ import {
   findClassRefMismatchWarnings,
   isAutomatedSalesTax,
   salesLineItemSchema,
+  sparseUpdateBodyFromRecord,
+  validatePatchEntityId,
   validatePatchLineAgainstCurrent,
   staleSyncTokenMessage,
   applyClassRefRequestWarnings,
@@ -29,6 +31,16 @@ const salesLine = (id: string, overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('sales-line-update helper', () => {
+  describe('sparseUpdateBodyFromRecord and validatePatchEntityId', () => {
+    it('strips sparse control fields and validates matching Id', () => {
+      expect(sparseUpdateBodyFromRecord({ Id: '1', SyncToken: '2', sparse: false, PrivateNote: 'x' })).toEqual({
+        PrivateNote: 'x',
+      });
+      expect(validatePatchEntityId('inv-1', 'inv-1', 'patch')).toBeNull();
+      expect(validatePatchEntityId('other', 'inv-1', 'patch')).toContain('must match');
+    });
+  });
+
   describe('computeLineAmount', () => {
     it('rounds fractional multiplication', () => {
       expect(computeLineAmount(3, 0.1)).toBe(0.3);
@@ -155,6 +167,22 @@ describe('sales-line-update helper', () => {
         [{ item_ref: 'item-2', qty: 1, unit_price: 2 }]
       );
       expect('lines' in withAnonymous && withAnonymous.lines.length).toBe(2);
+    });
+
+    it('rejects qty edit when UnitPrice is missing on the line', () => {
+      const current = [
+        {
+          Id: '1',
+          Amount: 1,
+          DetailType: 'SalesItemLineDetail',
+          SalesItemLineDetail: { ItemRef: { value: 'item-1' }, Qty: 1 },
+        },
+      ];
+      const result = buildMergedLines(current, [{ id: '1', qty: 2 }]);
+      expect(result).toEqual({
+        error:
+          'Line 1 requires finite Qty and UnitPrice when editing qty or unit_price; supply both values on the line_items entry.',
+      });
     });
 
     it('returns validation errors without throwing', () => {
@@ -288,6 +316,13 @@ describe('sales-line-update helper', () => {
     it('accepts valid shapes and rejects bad qty', () => {
       expect(salesLineItemSchema.safeParse({ id: '1', qty: 2 }).success).toBe(true);
       expect(salesLineItemSchema.safeParse({ qty: 0 }).success).toBe(false);
+    });
+
+    it('rejects empty string refs', () => {
+      expect(salesLineItemSchema.safeParse({ id: '' }).success).toBe(false);
+      expect(salesLineItemSchema.safeParse({ item_ref: '' }).success).toBe(false);
+      expect(salesLineItemSchema.safeParse({ tax_code_ref: '' }).success).toBe(false);
+      expect(salesLineItemSchema.safeParse({ class_ref: '' }).success).toBe(false);
     });
   });
 

@@ -8,14 +8,14 @@ import {
 /** Prior art: upstream #86 (bill read-merge-write); JoJa84 fork (append-only line_items_to_add, SubTotal filter). */
 
 export const salesLineItemSchema = z.object({
-  id: z.string().optional(),
+  id: z.string().min(1).optional(),
   remove: z.boolean().optional(),
-  item_ref: z.string().optional(),
+  item_ref: z.string().min(1).optional(),
   qty: z.number().positive().optional(),
   unit_price: z.number().min(0).optional(),
   description: z.string().optional(),
-  tax_code_ref: z.string().optional(),
-  class_ref: z.string().optional(),
+  tax_code_ref: z.string().min(1).optional(),
+  class_ref: z.string().min(1).optional(),
   service_date: z.string().optional(),
 });
 
@@ -104,10 +104,51 @@ function mergeSalesLineEdit(currentLine: any, item: SalesLineItemInput): any {
   }
 
   if (item.qty !== undefined || item.unit_price !== undefined) {
-    merged.Amount = computeLineAmount(detail.Qty, detail.UnitPrice);
+    const qty = detail.Qty;
+    const unitPrice = detail.UnitPrice;
+    if (typeof qty !== "number" || !Number.isFinite(qty) || typeof unitPrice !== "number" || !Number.isFinite(unitPrice)) {
+      return merged;
+    }
+    merged.Amount = computeLineAmount(qty, unitPrice);
   }
 
   return merged;
+}
+
+function validateEditedLineAmount(line: any, item: SalesLineItemInput, lineId: string): string | null {
+  if (item.qty === undefined && item.unit_price === undefined) {
+    return null;
+  }
+  const detail = line.SalesItemLineDetail;
+  const qty = detail?.Qty;
+  const unitPrice = detail?.UnitPrice;
+  if (typeof qty !== "number" || !Number.isFinite(qty) || typeof unitPrice !== "number" || !Number.isFinite(unitPrice)) {
+    return (
+      `Line ${lineId} requires finite Qty and UnitPrice when editing qty or unit_price; ` +
+      `supply both values on the line_items entry.`
+    );
+  }
+  return null;
+}
+
+/** Strip fields that must not be taken from caller patch/header bodies on sparse updates. */
+export function sparseUpdateBodyFromRecord(record: Record<string, any>): Record<string, any> {
+  const { Id: _id, SyncToken: _sync, sparse: _sparse, Line: _line, ...rest } = record;
+  return rest;
+}
+
+export function validatePatchEntityId(
+  patchId: unknown,
+  expectedId: string,
+  fieldLabel: string
+): string | null {
+  if (patchId === undefined || patchId === null) {
+    return null;
+  }
+  if (String(patchId) !== String(expectedId)) {
+    return `${fieldLabel}.Id must match ${expectedId}; omit Id or use the same value.`;
+  }
+  return null;
 }
 
 function filterBaseLines(currentLines: any[]): any[] {
@@ -189,7 +230,12 @@ export function buildMergedLines(
     }
 
     if (item && !item.remove && isSalesItemLine(line)) {
-      output.push(mergeSalesLineEdit(line, item));
+      const mergedLine = mergeSalesLineEdit(line, item);
+      const amountError = validateEditedLineAmount(mergedLine, item, id!);
+      if (amountError) {
+        return { error: amountError };
+      }
+      output.push(mergedLine);
     } else {
       output.push(line);
     }

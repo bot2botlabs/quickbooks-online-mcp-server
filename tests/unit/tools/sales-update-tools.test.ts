@@ -24,6 +24,10 @@ describe('sales update tool schemas (#141)', () => {
 
   const lineItem = { id: '1', qty: 2, item_ref: 'item-1', unit_price: 1 };
 
+  it('update_invoice accepts line_items without patch', () => {
+    expect(UpdateInvoiceTool.schema.safeParse({ invoice_id: '1', line_items: [lineItem] }).success).toBe(true);
+  });
+
   it('update_invoice accepts line_items and rejects invalid qty', () => {
     expect(UpdateInvoiceTool.schema.safeParse({ invoice_id: '1', patch: {}, line_items: [lineItem] }).success).toBe(
       true
