@@ -163,16 +163,13 @@ function collectFromObject(
   if (!shape) return value;
 
   const known = new Set(Object.keys(shape));
-  if (path.includes("[")) {
-    supportedNested.set(
-      collapseArrayIndexes(path),
-      [...known].sort()
-    );
-  }
 
   for (const key of Object.keys(value)) {
     if (!known.has(key)) {
       extras.push(joinPath(path, key));
+      if (path.includes("[")) {
+        supportedNested.set(collapseArrayIndexes(path), [...known].sort());
+      }
     }
   }
 

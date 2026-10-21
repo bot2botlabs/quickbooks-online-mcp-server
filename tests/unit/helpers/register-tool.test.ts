@@ -180,6 +180,45 @@ describe("unsupported parameter reporting", () => {
     expect(result.content[1].text).toBe("ok"); // original response preserved
   });
 
+  it("uses byte-identical top-level warning when nested arrays have no unknown keys", async () => {
+    const line = z.object({ item_ref: z.string(), qty: z.number(), unit_price: z.number() });
+    const schema = z.object({
+      customer_ref: z.string(),
+      line_items: z.array(line).min(1),
+    });
+    const params = {
+      customer_ref: "4",
+      ship_date: "2026-10-21",
+      line_items: [{ item_ref: "4", qty: 1, unit_price: 1 }],
+    };
+    const known = knownParamKeys(schema);
+    const expected = unsupportedParamsWarning("create_invoice", known, params);
+    const { result } = await runRegistered("create_invoice", schema, params);
+    expect(result.content[0].text).toBe(expected);
+    expect(result.content[0].text).not.toContain("Supported in");
+    expect(result.content[1].text).toBe("ok");
+  });
+
+  it("lists Supported in only for array locations that had unknown keys", async () => {
+    const line = z.object({ item_ref: z.string(), qty: z.number(), unit_price: z.number() });
+    const linkedTxn = z.object({ txn_id: z.string(), txn_type: z.string() });
+    const schema = z.object({
+      customer_ref: z.string(),
+      line_items: z.array(line).min(1),
+      linked_txn: z.array(linkedTxn).optional(),
+    });
+    const params = {
+      customer_ref: "4",
+      line_items: [{ item_ref: "4", qty: 1, unit_price: 1, class_ref: "682828" }],
+      linked_txn: [{ txn_id: "1", txn_type: "Invoice" }],
+    };
+    const { result } = await runRegistered("create_invoice", schema, params);
+    const warning = result.content[0].text as string;
+    expect(warning).toContain("line_items[0].class_ref");
+    expect(warning).toContain("\nSupported in line_items[]:");
+    expect(warning).not.toMatch(/Supported in linked_txn/);
+  });
+
   it("strips nested unknown keys and names them in the warning", async () => {
     const line = z.object({ item_ref: z.string(), qty: z.number(), unit_price: z.number() });
     const schema = z.object({
