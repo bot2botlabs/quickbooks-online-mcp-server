@@ -52,7 +52,18 @@ describe('Invoice Handlers', () => {
     });
 
     it('should pass per-line ClassRef to QuickBooks when class_ref is given', async () => {
-      mockQuickBooksInstance.createInvoice.mockImplementation((payload: any, cb: any) => cb(null, { Id: '123' }));
+      mockQuickBooksInstance.createInvoice.mockImplementation((payload: any, cb: any) =>
+        cb(null, {
+          Id: '123',
+          Line: [
+            {
+              DetailType: 'SalesItemLineDetail',
+              SalesItemLineDetail: { ClassRef: { value: '682828' } },
+            },
+            { DetailType: 'SalesItemLineDetail', SalesItemLineDetail: {} },
+          ],
+        })
+      );
 
       await createQuickbooksInvoice({
         customer_ref: 'cust-1',
@@ -95,6 +106,55 @@ describe('Invoice Handlers', () => {
       expect(result.isError).toBe(true);
       expect(result.error).toContain('search_classes');
       expect(mockQuickBooksInstance.createInvoice).not.toHaveBeenCalled();
+    });
+
+    it('should attach _warning when QuickBooks saves without applying class_ref', async () => {
+      mockQuickBooksInstance.getPreferences.mockImplementation((cb: any) =>
+        cb(null, { AccountingInfoPrefs: { ClassTrackingPerTxn: false, ClassTrackingPerTxnLine: false } })
+      );
+      mockQuickBooksInstance.createInvoice.mockImplementation((_payload: any, cb: any) =>
+        cb(null, {
+          Id: '169',
+          Line: [
+            {
+              DetailType: 'SalesItemLineDetail',
+              SalesItemLineDetail: { ItemRef: { value: '4' } },
+            },
+          ],
+        })
+      );
+
+      const result = await createQuickbooksInvoice({
+        customer_ref: 'cust-1',
+        line_items: [{ item_ref: 'item-1', qty: 1, unit_price: 1, class_ref: '682828' }],
+      });
+
+      expect(result.isError).toBe(false);
+      expect((result.result as any)._warning).toContain('did not apply class_ref on line(s) 1');
+      expect(mockQuickBooksInstance.getPreferences).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not call getPreferences when class_ref was saved correctly', async () => {
+      mockQuickBooksInstance.createInvoice.mockImplementation((_payload: any, cb: any) =>
+        cb(null, {
+          Id: '170',
+          Line: [
+            {
+              DetailType: 'SalesItemLineDetail',
+              SalesItemLineDetail: { ClassRef: { value: '682828' } },
+            },
+          ],
+        })
+      );
+
+      const result = await createQuickbooksInvoice({
+        customer_ref: 'cust-1',
+        line_items: [{ item_ref: 'item-1', qty: 1, unit_price: 1, class_ref: '682828' }],
+      });
+
+      expect(result.isError).toBe(false);
+      expect((result.result as any)._warning).toBeUndefined();
+      expect(mockQuickBooksInstance.getPreferences).not.toHaveBeenCalled();
     });
 
     it('should surface QuickBooks fault details when create fails with class_ref', async () => {

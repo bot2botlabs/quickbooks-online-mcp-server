@@ -57,6 +57,9 @@ export function describeClassTrackingPreferenceHint(preferences: unknown): strin
   return null;
 }
 
+const GENERIC_CLASS_REF_DROPPED_SUFFIX =
+  "Line-level class tracking may be disabled or misconfigured in this company.";
+
 function getPreferences(quickbooks: unknown): Promise<unknown> {
   return new Promise((resolve, reject) => {
     (quickbooks as { getPreferences: (cb: (err: unknown, prefs: unknown) => void) => void }).getPreferences(
@@ -69,6 +72,77 @@ function getPreferences(quickbooks: unknown): Promise<unknown> {
       }
     );
   });
+}
+
+function getSalesItemLines(savedTxn: unknown): Array<{ SalesItemLineDetail?: { ClassRef?: { value?: string } } }> {
+  const lines = (savedTxn as { Line?: unknown[] } | null)?.Line;
+  if (!Array.isArray(lines)) {
+    return [];
+  }
+  return lines.filter(
+    (line): line is { SalesItemLineDetail?: { ClassRef?: { value?: string } } } =>
+      Boolean(line && typeof line === "object" && (line as { SalesItemLineDetail?: unknown }).SalesItemLineDetail)
+  );
+}
+
+/** 1-based line numbers in the original line_items array where class_ref was not saved as requested. */
+export function findClassRefMismatchedLineNumbers(
+  lineItems: LineWithOptionalClassRef[],
+  savedTxn: unknown
+): number[] {
+  const savedSalesLines = getSalesItemLines(savedTxn);
+  const mismatches: number[] = [];
+  for (let i = 0; i < lineItems.length; i++) {
+    const requested = lineItems[i]?.class_ref;
+    if (!requested) {
+      continue;
+    }
+    const savedValue = savedSalesLines[i]?.SalesItemLineDetail?.ClassRef?.value;
+    const saved = savedValue != null ? String(savedValue) : undefined;
+    if (saved !== requested) {
+      mismatches.push(i + 1);
+    }
+  }
+  return mismatches;
+}
+
+function classTrackingHintWithoutPrefix(preferences: unknown): string | null {
+  const hint = describeClassTrackingPreferenceHint(preferences);
+  if (!hint) {
+    return null;
+  }
+  return hint.replace(/^Class tracking note: /, "");
+}
+
+export async function applySalesCreateClassRefWarning(
+  quickbooks: unknown,
+  lineItems: LineWithOptionalClassRef[],
+  created: unknown
+): Promise<unknown> {
+  if (!lineItemsIncludeClassRef(lineItems)) {
+    return created;
+  }
+  const mismatched = findClassRefMismatchedLineNumbers(lineItems, created);
+  if (mismatched.length === 0) {
+    return created;
+  }
+
+  let suffix = GENERIC_CLASS_REF_DROPPED_SUFFIX;
+  try {
+    const preferences = await getPreferences(quickbooks);
+    const tailored = classTrackingHintWithoutPrefix(preferences);
+    if (tailored) {
+      suffix = tailored;
+    }
+  } catch {
+    // Best-effort preferences lookup when class_ref was dropped on save.
+  }
+
+  const lineList = mismatched.join(", ");
+  const warning =
+    `Warning: QuickBooks saved this transaction but did not apply class_ref on line(s) ${lineList}. ${suffix}`;
+
+  return { ...(created as object), _warning: warning };
 }
 
 export async function formatSalesCreateError(
@@ -87,7 +161,7 @@ export async function formatSalesCreateError(
       message = `${message}\n\n${hint}`;
     }
   } catch {
-    // Preferences lookup is best-effort on the failure path only.
+    // Best-effort preferences lookup on the failure path.
   }
   return message;
 }

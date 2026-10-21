@@ -65,7 +65,18 @@ describe('SalesReceipt Handlers', () => {
     });
 
     it('should pass per-line ClassRef to QuickBooks when class_ref is given', async () => {
-      mockQuickBooksInstance.createSalesReceipt.mockImplementation((payload: any, cb: any) => cb(null, { Id: '123' }));
+      mockQuickBooksInstance.createSalesReceipt.mockImplementation((payload: any, cb: any) =>
+        cb(null, {
+          Id: '123',
+          Line: [
+            {
+              DetailType: 'SalesItemLineDetail',
+              SalesItemLineDetail: { ClassRef: { value: '682828' } },
+            },
+            { DetailType: 'SalesItemLineDetail', SalesItemLineDetail: {} },
+          ],
+        })
+      );
 
       await createQuickbooksSalesReceipt({
         customer_ref: 'cust-1',

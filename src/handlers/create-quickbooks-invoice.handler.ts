@@ -1,7 +1,11 @@
 import { QuickbooksClient } from "../clients/quickbooks-client.js";
 import { ToolResponse } from "../types/tool-response.js";
 import { formatError } from "../helpers/format-error.js";
-import { formatSalesCreateError, validateLineClassRefs } from "../helpers/sales-line-class-ref.js";
+import {
+  applySalesCreateClassRefWarning,
+  formatSalesCreateError,
+  validateLineClassRefs,
+} from "../helpers/sales-line-class-ref.js";
 
 export interface CreateInvoiceInput {
   customer_ref: string; // customer id
@@ -118,7 +122,11 @@ export async function createQuickbooksInvoice(data: CreateInvoiceInput): Promise
             error: await formatSalesCreateError(quickbooks, err, data.line_items),
           });
         } else {
-          resolve({ result: created, isError: false, error: null });
+          resolve({
+            result: await applySalesCreateClassRefWarning(quickbooks, data.line_items, created),
+            isError: false,
+            error: null,
+          });
         }
       });
     });

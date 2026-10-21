@@ -69,7 +69,17 @@ describe('Create Invoice Handler - template fields', () => {
   });
 
   it('should map per-line class_ref to SalesItemLineDetail.ClassRef', async () => {
-    mockQuickBooksInstance.createInvoice.mockImplementation((_payload: any, cb: any) => cb(null, { Id: '804' }));
+    mockQuickBooksInstance.createInvoice.mockImplementation((_payload: any, cb: any) =>
+      cb(null, {
+        Id: '804',
+        Line: [
+          {
+            DetailType: 'SalesItemLineDetail',
+            SalesItemLineDetail: { ClassRef: { value: '682828' } },
+          },
+        ],
+      })
+    );
 
     await createQuickbooksInvoice({
       customer_ref: '42',
