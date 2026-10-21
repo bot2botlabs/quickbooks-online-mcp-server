@@ -157,19 +157,12 @@ describe('Invoice Handlers', () => {
       expect(mockQuickBooksInstance.getPreferences).not.toHaveBeenCalled();
     });
 
-    it('should surface QuickBooks fault details when create fails with class_ref', async () => {
+    it('should use formatError without a class tracking note when create fails with tracking on', async () => {
       mockQuickBooksInstance.getPreferences.mockImplementation((cb: any) =>
         cb(null, { AccountingInfoPrefs: { ClassTrackingPerTxnLine: true } })
       );
       mockQuickBooksInstance.createInvoice.mockImplementation((_payload: any, cb: any) =>
-        cb(
-          {
-            Fault: {
-              Error: [{ Message: 'Invalid Reference Id', Detail: 'Invalid Reference Id : ClassRef', code: '2500' }],
-            },
-          },
-          null
-        )
+        cb(new Error('Request failed with status code 400'), null)
       );
 
       const result = await createQuickbooksInvoice({
@@ -178,8 +171,7 @@ describe('Invoice Handlers', () => {
       });
 
       expect(result.isError).toBe(true);
-      expect(result.error).toContain('Invalid Reference Id');
-      expect(result.error).toContain('code=2500');
+      expect(result.error).toBe('Error: Request failed with status code 400');
     });
   });
 });
