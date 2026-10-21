@@ -199,6 +199,28 @@ describe("unsupported parameter reporting", () => {
     expect(result.content[1].text).toBe("ok");
   });
 
+  it("shows Supported in for nested plain objects with unknown keys", async () => {
+    const schema = z.object({
+      id: z.string(),
+      sync_token: z.string(),
+      company_addr: z
+        .object({
+          line1: z.string().optional(),
+          city: z.string().optional(),
+        })
+        .optional(),
+    });
+    const params = {
+      id: "1",
+      sync_token: "0",
+      company_addr: { line1: "123 Main", zzz: "x" },
+    };
+    const { result } = await runRegistered("update_company_info", schema, params);
+    const warning = result.content[0].text as string;
+    expect(warning).toContain("company_addr.zzz");
+    expect(warning).toContain("\nSupported in company_addr: city, line1.");
+  });
+
   it("lists Supported in only for array locations that had unknown keys", async () => {
     const line = z.object({ item_ref: z.string(), qty: z.number(), unit_price: z.number() });
     const linkedTxn = z.object({ txn_id: z.string(), txn_type: z.string() });

@@ -67,6 +67,12 @@ function collapseArrayIndexes(path: string): string {
   return path.replace(/\[\d+\]/g, "[]");
 }
 
+/** Location key for a Supported-in hint; null at the top-level params object. */
+function supportedHintLocation(path: string): string | null {
+  if (!path) return null;
+  return collapseArrayIndexes(path);
+}
+
 export interface CollectAndStripResult {
   cleaned: unknown;
   extras: string[];
@@ -167,8 +173,9 @@ function collectFromObject(
   for (const key of Object.keys(value)) {
     if (!known.has(key)) {
       extras.push(joinPath(path, key));
-      if (path.includes("[")) {
-        supportedNested.set(collapseArrayIndexes(path), [...known].sort());
+      const hintLoc = supportedHintLocation(path);
+      if (hintLoc) {
+        supportedNested.set(hintLoc, [...known].sort());
       }
     }
   }

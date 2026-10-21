@@ -267,13 +267,27 @@ describe("nestedUnsupportedWarning", () => {
     expect(warning).toContain("\nSupported in line_items[]: item_ref, qty, unit_price.");
   });
 
-  it("builds nested warnings without Supported-in lines for non-array nesting", () => {
+  it("builds Supported-in hints for nested plain objects", () => {
     const schema = z.object({ a: z.object({ b: z.string() }) });
     const params = { a: { b: "v", x: 1 } };
     const collected = collectAndStrip(schema, params);
     const warning = nestedUnsupportedWarning("t", new Set(["a"]), collected, params)!;
     expect(warning).toContain("a.x");
-    expect(warning).not.toContain("Supported in");
+    expect(warning).toContain("\nSupported in a: b.");
+  });
+
+  it("omits Supported-in lines when extras look nested but are top-level keys", () => {
+    const schema = z.object({ customer_ref: z.string() });
+    const params = { customer_ref: "1", "line_items[0].x": 1 };
+    const collected = collectAndStrip(schema, params);
+    const warning = nestedUnsupportedWarning(
+      "create_invoice",
+      new Set(["customer_ref"]),
+      collected,
+      params
+    )!;
+    expect(warning).toContain("line_items[0].x");
+    expect(warning).not.toContain("\nSupported in");
   });
 
   it("returns null when nested extras exist but top-level keys are unknown", () => {
