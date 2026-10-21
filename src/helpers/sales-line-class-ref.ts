@@ -1,5 +1,71 @@
 import { formatError } from "./format-error.js";
 
+type QuickBooksFaultError = {
+  Message?: string;
+  Detail?: string;
+  code?: string;
+  element?: string;
+};
+
+function getQuickBooksFaultPayload(error: unknown): unknown {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+  const candidate = error as Record<string, unknown>;
+  if (candidate.Fault) {
+    return candidate;
+  }
+  const response = candidate.response;
+  if (response && typeof response === "object") {
+    const data = (response as Record<string, unknown>).data;
+    if (data && typeof data === "object" && (data as Record<string, unknown>).Fault) {
+      return data;
+    }
+  }
+  return null;
+}
+
+function formatQuickBooksFaultError(entry: QuickBooksFaultError): string {
+  const parts: string[] = [];
+  if (entry.Message) {
+    parts.push(entry.Message);
+  }
+  if (entry.Detail && entry.Detail !== entry.Message) {
+    parts.push(entry.Detail);
+  }
+  if (entry.code) {
+    parts.push(`code=${entry.code}`);
+  }
+  if (entry.element) {
+    parts.push(`element=${entry.element}`);
+  }
+  return parts.join(" — ");
+}
+
+function formatQuickBooksFaultMessage(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const errors = (payload as { Fault?: { Error?: QuickBooksFaultError[] } }).Fault?.Error;
+  if (!Array.isArray(errors) || errors.length === 0) {
+    return null;
+  }
+  const formatted = errors.map(formatQuickBooksFaultError).filter(Boolean);
+  if (formatted.length === 0) {
+    return null;
+  }
+  return formatted.join("; ");
+}
+
+/** Formats a sales-transaction create API error, including QBO Fault detail when present. */
+function formatSalesCreateErrorMessage(err: unknown): string {
+  const faultMessage = formatQuickBooksFaultMessage(getQuickBooksFaultPayload(err));
+  if (faultMessage) {
+    return `Error: ${faultMessage}`;
+  }
+  return formatError(err);
+}
+
 export type LineWithOptionalClassRef = { class_ref?: string };
 
 const CLASS_ID_PATTERN = /^\d+$/;
@@ -150,7 +216,7 @@ export async function formatSalesCreateError(
   err: unknown,
   lineItems: LineWithOptionalClassRef[]
 ): Promise<string> {
-  let message = formatError(err);
+  let message = formatSalesCreateErrorMessage(err);
   if (!lineItemsIncludeClassRef(lineItems)) {
     return message;
   }

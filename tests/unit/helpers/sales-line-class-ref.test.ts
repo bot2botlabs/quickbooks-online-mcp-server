@@ -227,18 +227,60 @@ describe('sales-line-class-ref helpers', () => {
       },
     };
 
+    it('falls back to formatError when response data has no Fault', async () => {
+      const quickbooks = {
+        getPreferences: (cb: (err: null, prefs: unknown) => void) =>
+          cb(null, { AccountingInfoPrefs: { ClassTrackingPerTxnLine: true } }),
+      };
+      const err = Object.assign(new Error('Request failed with status code 400'), {
+        response: { data: { message: 'not a fault' } },
+      });
+
+      const message = await formatSalesCreateError(quickbooks, err, [{ class_ref: '999999' }]);
+
+      expect(message).toBe('Error: Request failed with status code 400');
+    });
+
     it('formats QuickBooks Fault details from axios-style errors', async () => {
       const getPreferences = jest.fn((cb: (err: null, prefs: unknown) => void) =>
         cb(null, { AccountingInfoPrefs: { ClassTrackingPerTxnLine: true } })
       );
       const quickbooks = { getPreferences };
-      const err = Object.assign(new Error('Request failed with status code 400'), { response: { data: qboFault } });
+      const err = Object.assign(new Error('Request failed with status code 400'), {
+        response: {
+          data: {
+            Fault: {
+              Error: [
+                {
+                  Message: 'Invalid Reference Id',
+                  Detail: 'Invalid Reference Id : ClassRef',
+                  code: '2500',
+                  element: 'ClassRef',
+                },
+              ],
+            },
+          },
+        },
+      });
 
       const message = await formatSalesCreateError(quickbooks, err, [{ class_ref: '999999' }]);
 
       expect(message).toContain('Invalid Reference Id');
       expect(message).toContain('code=2500');
+      expect(message).toContain('element=ClassRef');
       expect(getPreferences).toHaveBeenCalledTimes(1);
+    });
+
+    it('ignores an empty Fault.Error array', async () => {
+      const quickbooks = {
+        getPreferences: (cb: (err: null, prefs: unknown) => void) =>
+          cb(null, { AccountingInfoPrefs: { ClassTrackingPerTxnLine: true } }),
+      };
+      const err = { Fault: { Error: [] } };
+
+      const message = await formatSalesCreateError(quickbooks, err, [{ class_ref: '999999' }]);
+
+      expect(message).toContain('Unknown error');
     });
 
     it('skips preferences lookup when no class_ref was sent', async () => {
@@ -272,6 +314,46 @@ describe('sales-line-class-ref helpers', () => {
       const message = await formatSalesCreateError(quickbooks, err, [{ class_ref: '999999' }]);
 
       expect(message).toBe('Error: Invalid Reference Id — Invalid Reference Id : ClassRef — code=2500');
+    });
+
+    it('formats a fault payload passed as the error object itself', async () => {
+      const quickbooks = {
+        getPreferences: (cb: (err: null, prefs: unknown) => void) =>
+          cb(null, { AccountingInfoPrefs: { ClassTrackingPerTxnLine: true } }),
+      };
+      const err = {
+        Fault: {
+          Error: [{ Message: 'Object Not Found', Detail: 'Something was not found', code: '610' }],
+        },
+      };
+
+      const message = await formatSalesCreateError(quickbooks, err, [{ class_ref: '999999' }]);
+
+      expect(message).toBe('Error: Object Not Found — Something was not found — code=610');
+    });
+
+    it('does not duplicate Detail when it matches Message', async () => {
+      const quickbooks = {
+        getPreferences: (cb: (err: null, prefs: unknown) => void) =>
+          cb(null, { AccountingInfoPrefs: { ClassTrackingPerTxnLine: true } }),
+      };
+      const err = { Fault: { Error: [{ Message: 'Duplicate', Detail: 'Duplicate', code: '1' }] } };
+
+      const message = await formatSalesCreateError(quickbooks, err, [{ class_ref: '999999' }]);
+
+      expect(message).toBe('Error: Duplicate — code=1');
+    });
+
+    it('returns null-formatted faults as generic formatError output', async () => {
+      const quickbooks = {
+        getPreferences: (cb: (err: null, prefs: unknown) => void) =>
+          cb(null, { AccountingInfoPrefs: { ClassTrackingPerTxnLine: true } }),
+      };
+      const err = { Fault: { Error: [{}] } };
+
+      const message = await formatSalesCreateError(quickbooks, err, [{ class_ref: '999999' }]);
+
+      expect(message).toContain('Unknown error');
     });
   });
 });
