@@ -10,6 +10,7 @@ export interface CreateInvoiceInput {
     unit_price: number;
     description?: string;
     tax_code_ref?: string; // TaxCode id (non-US) or TAX/NON (US)
+    class_ref?: string; // Class id for per-line class tracking
     service_date?: string; // YYYY-MM-DD, per-line ServiceDate
   }>;
   doc_number?: string;
@@ -79,6 +80,7 @@ export async function createQuickbooksInvoice(data: CreateInvoiceInput): Promise
           Qty: l.qty,
           UnitPrice: l.unit_price,
           TaxCodeRef: l.tax_code_ref ? { value: l.tax_code_ref } : undefined,
+          ClassRef: l.class_ref ? { value: l.class_ref } : undefined,
           ServiceDate: l.service_date || undefined,
         },
       })),

@@ -51,6 +51,22 @@ describe('Invoice Handlers', () => {
       expect(payload.GlobalTaxCalculation).toBe('TaxExcluded');
     });
 
+    it('should pass per-line ClassRef to QuickBooks when class_ref is given', async () => {
+      mockQuickBooksInstance.createInvoice.mockImplementation((payload: any, cb: any) => cb(null, { Id: '123' }));
+
+      await createQuickbooksInvoice({
+        customer_ref: 'cust-1',
+        line_items: [
+          { item_ref: 'item-1', qty: 1, unit_price: 100, class_ref: 'class-7' },
+          { item_ref: 'item-2', qty: 1, unit_price: 50 },
+        ],
+      });
+
+      const payload = (mockQuickBooksInstance.createInvoice.mock.calls[0] as any)[0];
+      expect(payload.Line[0].SalesItemLineDetail.ClassRef).toEqual({ value: 'class-7' });
+      expect(payload.Line[1].SalesItemLineDetail.ClassRef).toBeUndefined();
+    });
+
     it('should handle authentication errors', async () => {
       (mockQuickbooksClientClass.getInstance as any).mockRejectedValue(new Error('Auth failed'));
 

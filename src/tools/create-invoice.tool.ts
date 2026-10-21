@@ -17,6 +17,7 @@ const lineItemSchema = z.object({
     .describe(
       "Tax code for this line: a TaxCode Id for non-US companies (use search_tax_codes), or 'TAX'/'NON' for US companies"
     ),
+  class_ref: z.string().min(1).optional().describe("Class ID for per-line class tracking"),
   service_date: z
     .string()
     .min(1)
