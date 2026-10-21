@@ -5,6 +5,7 @@ import {
   buildMergedLines,
   evaluateSalesLinePostWrite,
   sparseUpdateBodyFromRecord,
+  staleSyncTokenIfCallerMismatch,
   validatePatchLineAgainstCurrent,
   type SalesLineItemInput,
 } from "../helpers/sales-line-update.js";
@@ -51,15 +52,9 @@ export async function updateQuickbooksEstimate(input: UpdateEstimateInput | any)
         (quickbooks as any).getEstimate(String(estimateData.Id), (e: any, est: any) => (e ? rej(e) : res(est)));
       });
 
-      if (
-        estimateData.SyncToken !== undefined &&
-        String(estimateData.SyncToken) !== String(current.SyncToken)
-      ) {
-        return {
-          result: null,
-          isError: true,
-          error: `stale sync_token: the transaction changed since you read it (current SyncToken ${current.SyncToken}); re-read and retry`,
-        };
+      const staleSyncError = staleSyncTokenIfCallerMismatch(estimateData, String(current.SyncToken));
+      if (staleSyncError) {
+        return { result: null, isError: true, error: staleSyncError };
       }
 
       const merged = buildMergedLines(current.Line ?? [], line_items);
@@ -98,6 +93,11 @@ export async function updateQuickbooksEstimate(input: UpdateEstimateInput | any)
       const current: any = await new Promise((res, rej) => {
         (quickbooks as any).getEstimate(String(estimateData.Id), (e: any, est: any) => (e ? rej(e) : res(est)));
       });
+
+      const staleSyncError = staleSyncTokenIfCallerMismatch(estimateData, String(current.SyncToken));
+      if (staleSyncError) {
+        return { result: null, isError: true, error: staleSyncError };
+      }
 
       const patchLineError = validatePatchLineAgainstCurrent(
         current.Line ?? [],

@@ -253,6 +253,37 @@ describe('updateQuickbooksInvoice line_items (#141)', () => {
     expect(result.isError).toBe(false);
   });
 
+  it('rejects stale patch.SyncToken before write and accepts matching token', async () => {
+    mockQuickBooksInstance.getInvoice.mockImplementation((_id: any, cb: any) => cb(null, currentInvoice));
+
+    const stale = await updateQuickbooksInvoice({
+      invoice_id: 'inv-1',
+      patch: { SyncToken: '0', PrivateNote: 'x' },
+    });
+    expect(stale.isError).toBe(true);
+    expect(stale.error).toContain('stale sync_token');
+    expect(mockQuickBooksInstance.updateInvoice).not.toHaveBeenCalled();
+
+    mockQuickBooksInstance.updateInvoice.mockImplementation((payload: any, cb: any) => cb(null, payload));
+    const ok = await updateQuickbooksInvoice({
+      invoice_id: 'inv-1',
+      patch: { SyncToken: '3', PrivateNote: 'ok' },
+    });
+    expect(ok.isError).toBe(false);
+    expect(mockQuickBooksInstance.updateInvoice).toHaveBeenCalled();
+  });
+
+  it('rejects stale patch.sync_token on line_items path', async () => {
+    mockQuickBooksInstance.getInvoice.mockImplementation((_id: any, cb: any) => cb(null, currentInvoice));
+    const result = await updateQuickbooksInvoice({
+      invoice_id: 'inv-1',
+      patch: { sync_token: '0' },
+      line_items: [{ id: '1', qty: 2 }],
+    });
+    expect(result.isError).toBe(true);
+    expect(mockQuickBooksInstance.updateInvoice).not.toHaveBeenCalled();
+  });
+
   it('rejects patch.Id that differs from invoice_id before any write', async () => {
     const result = await updateQuickbooksInvoice({
       invoice_id: 'inv-1',

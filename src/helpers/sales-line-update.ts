@@ -526,5 +526,20 @@ export function staleSyncTokenMessage(currentToken: string): string {
   );
 }
 
+/** When caller supplied SyncToken or sync_token, it must match the freshly read token. */
+export function staleSyncTokenIfCallerMismatch(
+  callerBody: Record<string, unknown>,
+  currentSyncToken: string
+): string | null {
+  const supplied = callerBody.SyncToken ?? callerBody.sync_token;
+  if (supplied === undefined || supplied === null) {
+    return null;
+  }
+  if (String(supplied) !== String(currentSyncToken)) {
+    return staleSyncTokenMessage(String(currentSyncToken));
+  }
+  return null;
+}
+
 export const LINE_ITEMS_TOOL_DESCRIPTION =
   "Optional line_items: lines you do not mention are kept unchanged. Use id from the read tool to edit a line; omit id to add one; set remove: true with id to delete one. Use search_classes for class Ids.";

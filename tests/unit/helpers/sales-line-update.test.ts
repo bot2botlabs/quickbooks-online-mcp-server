@@ -10,6 +10,7 @@ import {
   validatePatchEntityId,
   validatePatchLineAgainstCurrent,
   staleSyncTokenMessage,
+  staleSyncTokenIfCallerMismatch,
   applyClassRefRequestWarnings,
   evaluateSalesLinePostWrite,
 } from '../../../src/helpers/sales-line-update.js';
@@ -309,6 +310,15 @@ describe('sales-line-update helper', () => {
   describe('staleSyncTokenMessage', () => {
     it('includes current token', () => {
       expect(staleSyncTokenMessage('7')).toContain('7');
+    });
+  });
+
+  describe('staleSyncTokenIfCallerMismatch', () => {
+    it('errors when supplied token differs and passes when omitted or matching', () => {
+      expect(staleSyncTokenIfCallerMismatch({}, '3')).toBeNull();
+      expect(staleSyncTokenIfCallerMismatch({ SyncToken: '3' }, '3')).toBeNull();
+      expect(staleSyncTokenIfCallerMismatch({ sync_token: '3' }, '3')).toBeNull();
+      expect(staleSyncTokenIfCallerMismatch({ SyncToken: '0' }, '3')).toContain('stale sync_token');
     });
   });
 

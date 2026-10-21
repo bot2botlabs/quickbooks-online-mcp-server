@@ -61,6 +61,36 @@ describe('updateQuickbooksEstimate line_items (#141)', () => {
     expect(result.isError).toBe(false);
   });
 
+  it('matching SyncToken allows line_items write', async () => {
+    mockQuickBooksInstance.getEstimate.mockImplementation((_id: any, cb: any) => cb(null, current));
+    mockQuickBooksInstance.getPreferences.mockImplementation((cb: any) => cb(null, {}));
+    mockQuickBooksInstance.updateEstimate.mockImplementation((payload: any, cb: any) => cb(null, payload));
+    const result = await updateQuickbooksEstimate({
+      estimate: { Id: 'est-1', SyncToken: '2' },
+      line_items: [{ id: '1', qty: 1 }],
+    });
+    expect(result.isError).toBe(false);
+  });
+
+  it('stale sync_token via estimate.sync_token blocks line_items write', async () => {
+    mockQuickBooksInstance.getEstimate.mockImplementation((_id: any, cb: any) => cb(null, current));
+    const result = await updateQuickbooksEstimate({
+      estimate: { Id: 'est-1', sync_token: '0' },
+      line_items: [{ id: '1', qty: 1 }],
+    });
+    expect(result.isError).toBe(true);
+    expect(mockQuickBooksInstance.updateEstimate).not.toHaveBeenCalled();
+  });
+
+  it('stale SyncToken blocks estimate.Line write', async () => {
+    mockQuickBooksInstance.getEstimate.mockImplementation((_id: any, cb: any) => cb(null, current));
+    const result = await updateQuickbooksEstimate({
+      estimate: { Id: 'est-1', SyncToken: '0', Line: [line('1'), line('2')] },
+    });
+    expect(result.isError).toBe(true);
+    expect(mockQuickBooksInstance.updateEstimate).not.toHaveBeenCalled();
+  });
+
   it('stale SyncToken blocks line_items write', async () => {
     mockQuickBooksInstance.getEstimate.mockImplementation((_id: any, cb: any) => cb(null, current));
     const result = await updateQuickbooksEstimate({

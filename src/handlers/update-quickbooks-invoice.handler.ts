@@ -5,6 +5,7 @@ import {
   buildMergedLines,
   evaluateSalesLinePostWrite,
   sparseUpdateBodyFromRecord,
+  staleSyncTokenIfCallerMismatch,
   validatePatchEntityId,
   validatePatchLineAgainstCurrent,
   type SalesLineItemInput,
@@ -32,6 +33,11 @@ export async function updateQuickbooksInvoice(input: UpdateInvoiceInput): Promis
     const existing: any = await new Promise((res, rej) => {
       (quickbooks as any).getInvoice(invoice_id, (e: any, inv: any) => (e ? rej(e) : res(inv)));
     });
+
+    const staleSyncError = staleSyncTokenIfCallerMismatch(patch, String(existing.SyncToken));
+    if (staleSyncError) {
+      return { result: null, isError: true, error: staleSyncError };
+    }
 
     if (line_items && line_items.length > 0) {
       if (patch?.Line !== undefined) {
