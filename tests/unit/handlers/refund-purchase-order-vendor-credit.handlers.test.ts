@@ -208,6 +208,266 @@ describe('Refund, PurchaseOrder, VendorCredit Handlers', () => {
       expect(result.isError).toBe(true);
     });
 
+    it('header-only update does not call getRefundReceipt', async () => {
+      mockQuickBooksInstance.updateRefundReceipt.mockImplementation((payload: any, cb: any) => cb(null, {}));
+      await updateQuickbooksRefundReceipt({ id: '1', sync_token: '0' });
+      expect(mockQuickBooksInstance.getRefundReceipt).not.toHaveBeenCalled();
+    });
+
+    it('line_items update merges lines', async () => {
+      const current = {
+        Id: '1',
+        SyncToken: '0',
+        Line: [
+          {
+            Id: '1',
+            DetailType: 'SalesItemLineDetail',
+            Amount: 5,
+            SalesItemLineDetail: { ItemRef: { value: 'item-1' }, Qty: 1, UnitPrice: 5 },
+          },
+        ],
+      };
+      mockQuickBooksInstance.getRefundReceipt.mockImplementation((_id: any, cb: any) => cb(null, current));
+      mockQuickBooksInstance.getPreferences.mockImplementation((cb: any) => cb(null, {}));
+      mockQuickBooksInstance.updateRefundReceipt.mockImplementation((payload: any, cb: any) => cb(null, payload));
+
+      const result = await updateQuickbooksRefundReceipt({
+        id: '1',
+        sync_token: '0',
+        line_items: [{ id: '1', description: 'updated' }],
+      });
+
+      expect(result.isError).toBe(false);
+    });
+
+    it('getRefundReceipt failure on line_items path', async () => {
+      mockQuickBooksInstance.getRefundReceipt.mockImplementation((_id: any, cb: any) => cb(new Error('read'), null));
+      const result = await updateQuickbooksRefundReceipt({
+        id: '1',
+        sync_token: '0',
+        line_items: [{ id: '1', qty: 1 }],
+      });
+      expect(result.isError).toBe(true);
+    });
+
+    it('line_items invalid class_ref and ClassRef post-write error', async () => {
+      const current = {
+        Id: '1',
+        SyncToken: '0',
+        Line: [
+          {
+            Id: '1',
+            DetailType: 'SalesItemLineDetail',
+            Amount: 5,
+            SalesItemLineDetail: {
+              ItemRef: { value: 'item-1' },
+              Qty: 1,
+              UnitPrice: 5,
+              ClassRef: { value: '682828' },
+            },
+          },
+        ],
+      };
+      mockQuickBooksInstance.getRefundReceipt.mockImplementation((_id: any, cb: any) => cb(null, current));
+      const badClass = await updateQuickbooksRefundReceipt({
+        id: '1',
+        sync_token: '0',
+        line_items: [{ class_ref: 'bad-name' }],
+      });
+      expect(badClass.isError).toBe(true);
+
+      mockQuickBooksInstance.getPreferences.mockImplementation((cb: any) => cb(null, {}));
+      mockQuickBooksInstance.updateRefundReceipt.mockImplementation((_payload: any, cb: any) =>
+        cb(null, {
+          Line: [{ Id: '1', DetailType: 'SalesItemLineDetail', SalesItemLineDetail: { ItemRef: { value: 'item-1' } } }],
+        })
+      );
+      const postErr = await updateQuickbooksRefundReceipt({
+        id: '1',
+        sync_token: '0',
+        line_items: [{ id: '1', qty: 1 }],
+      });
+      expect(postErr.isError).toBe(true);
+    });
+
+    it('line_items sets optional header fields individually', async () => {
+      const current = {
+        Id: '1',
+        SyncToken: '0',
+        Line: [
+          {
+            Id: '1',
+            DetailType: 'SalesItemLineDetail',
+            Amount: 5,
+            SalesItemLineDetail: { ItemRef: { value: 'item-1' }, Qty: 1, UnitPrice: 5 },
+          },
+        ],
+      };
+      mockQuickBooksInstance.getRefundReceipt.mockImplementation((_id: any, cb: any) => cb(null, current));
+      mockQuickBooksInstance.getPreferences.mockImplementation((cb: any) => cb(null, {}));
+      mockQuickBooksInstance.updateRefundReceipt.mockImplementation((payload: any, cb: any) => cb(null, payload));
+      await updateQuickbooksRefundReceipt({
+        id: '1',
+        sync_token: '0',
+        customer_ref: 'cust-1',
+        line_items: [{ id: '1', qty: 1 }],
+      });
+      await updateQuickbooksRefundReceipt({
+        id: '1',
+        sync_token: '0',
+        private_note: 'n',
+        line_items: [{ id: '1', qty: 1 }],
+      });
+      await updateQuickbooksRefundReceipt({
+        id: '1',
+        sync_token: '0',
+        doc_number: 'RF-9',
+        line_items: [{ id: '1', qty: 1 }],
+      });
+      expect(mockQuickBooksInstance.updateRefundReceipt).toHaveBeenCalled();
+    });
+
+    it('line_items when read returns no Line completes post-write checks', async () => {
+      mockQuickBooksInstance.getRefundReceipt.mockImplementation((_id: any, cb: any) =>
+        cb(null, { Id: '1', SyncToken: '0' })
+      );
+      mockQuickBooksInstance.getPreferences.mockImplementation((cb: any) => cb(null, {}));
+      mockQuickBooksInstance.updateRefundReceipt.mockImplementation((payload: any, cb: any) => cb(null, payload));
+      const result = await updateQuickbooksRefundReceipt({
+        id: '1',
+        sync_token: '0',
+        line_items: [{ item_ref: 'item-1', qty: 1, unit_price: 2 }],
+      });
+      expect(result.isError).toBe(false);
+    });
+
+    it('line_items ok path without post-write warning', async () => {
+      const current = {
+        Id: '1',
+        SyncToken: '0',
+        Line: [
+          {
+            Id: '1',
+            DetailType: 'SalesItemLineDetail',
+            Amount: 5,
+            SalesItemLineDetail: { ItemRef: { value: 'item-1' }, Qty: 1, UnitPrice: 5 },
+          },
+        ],
+      };
+      mockQuickBooksInstance.getRefundReceipt.mockImplementation((_id: any, cb: any) => cb(null, current));
+      mockQuickBooksInstance.getPreferences.mockImplementation((cb: any) => cb(null, {}));
+      mockQuickBooksInstance.updateRefundReceipt.mockImplementation((payload: any, cb: any) => cb(null, payload));
+      const result = await updateQuickbooksRefundReceipt({
+        id: '1',
+        sync_token: '0',
+        line_items: [{ id: '1', description: 'x' }],
+      });
+      expect(result.isError).toBe(false);
+      expect((result.result as any)._warning).toBeUndefined();
+    });
+
+    it('line_items update API error and read without Line', async () => {
+      mockQuickBooksInstance.getRefundReceipt.mockImplementation((_id: any, cb: any) =>
+        cb(null, { Id: '1', SyncToken: '0' })
+      );
+      mockQuickBooksInstance.getPreferences.mockImplementation((cb: any) => cb(null, {}));
+      mockQuickBooksInstance.updateRefundReceipt.mockImplementation((_p: any, cb: any) => cb(new Error('write'), null));
+      const writeFail = await updateQuickbooksRefundReceipt({
+        id: '1',
+        sync_token: '0',
+        line_items: [{ item_ref: 'item-1', qty: 1, unit_price: 1 }],
+      });
+      expect(writeFail.isError).toBe(true);
+    });
+
+    it('line_items merge error', async () => {
+      mockQuickBooksInstance.getRefundReceipt.mockImplementation((_id: any, cb: any) =>
+        cb(null, {
+          Id: '1',
+          SyncToken: '0',
+          Line: [
+            {
+              Id: '1',
+              DetailType: 'SalesItemLineDetail',
+              Amount: 5,
+              SalesItemLineDetail: { ItemRef: { value: 'item-1' }, Qty: 1, UnitPrice: 5 },
+            },
+          ],
+        })
+      );
+      const result = await updateQuickbooksRefundReceipt({
+        id: '1',
+        sync_token: '0',
+        line_items: [{ id: '9', qty: 1 }],
+      });
+      expect(result.isError).toBe(true);
+    });
+
+    it('line_items validation stale token and header fields', async () => {
+      const current = {
+        Id: '1',
+        SyncToken: '0',
+        Line: [
+          {
+            Id: '1',
+            DetailType: 'SalesItemLineDetail',
+            Amount: 5,
+            SalesItemLineDetail: { ItemRef: { value: 'item-1' }, Qty: 1, UnitPrice: 5 },
+          },
+        ],
+      };
+      mockQuickBooksInstance.getRefundReceipt.mockImplementation((_id: any, cb: any) => cb(null, current));
+      const stale = await updateQuickbooksRefundReceipt({
+        id: '1',
+        sync_token: '9',
+        line_items: [{ id: '1', qty: 1 }],
+      });
+      expect(stale.isError).toBe(true);
+
+      mockQuickBooksInstance.getPreferences.mockImplementation((cb: any) => cb(null, {}));
+      mockQuickBooksInstance.updateRefundReceipt.mockImplementation((payload: any, cb: any) => cb(null, payload));
+      await updateQuickbooksRefundReceipt({
+        id: '1',
+        sync_token: '0',
+        customer_ref: 'cust-1',
+        private_note: 'n',
+        doc_number: 'RF-9',
+        line_items: [{ id: '1', qty: 1 }],
+      });
+      expect(mockQuickBooksInstance.updateRefundReceipt).toHaveBeenCalled();
+    });
+
+    it('line_items post-write warning path', async () => {
+      const current = {
+        Id: '1',
+        SyncToken: '0',
+        Line: [
+          {
+            Id: '1',
+            DetailType: 'SalesItemLineDetail',
+            Amount: 5,
+            SalesItemLineDetail: { ItemRef: { value: 'item-1' }, Qty: 1, UnitPrice: 5, TaxCodeRef: { value: 'NON' } },
+          },
+        ],
+      };
+      mockQuickBooksInstance.getRefundReceipt.mockImplementation((_id: any, cb: any) => cb(null, current));
+      mockQuickBooksInstance.getPreferences.mockImplementation((cb: any) =>
+        cb(null, { TaxPrefs: { PartnerTaxEnabled: true } })
+      );
+      mockQuickBooksInstance.updateRefundReceipt.mockImplementation((_payload: any, cb: any) =>
+        cb(null, {
+          Line: [{ Id: '1', DetailType: 'SalesItemLineDetail', SalesItemLineDetail: { ItemRef: { value: 'item-1' } } }],
+        })
+      );
+      const result = await updateQuickbooksRefundReceipt({
+        id: '1',
+        sync_token: '0',
+        line_items: [{ id: '1', qty: 1 }],
+      });
+      expect(result.isError).toBe(false);
+      expect((result.result as any)._warning).toContain('Automated Sales Tax');
+    });
+
     it('should delete a refund receipt', async () => {
       mockQuickBooksInstance.deleteRefundReceipt.mockImplementation((payload: any, cb: any) => cb(null, {}));
 

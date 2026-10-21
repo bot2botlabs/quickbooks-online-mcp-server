@@ -204,6 +204,267 @@ describe('CreditMemo Handlers', () => {
       expect(result.isError).toBe(false);
       expect(result.result).toEqual(mockUpdated);
     });
+
+    it('header-only update does not call getCreditMemo', async () => {
+      mockQuickBooksInstance.updateCreditMemo.mockImplementation((payload: any, cb: any) => cb(null, { Id: '123' }));
+      await updateQuickbooksCreditMemo({ id: '123', sync_token: '0' });
+      expect(mockQuickBooksInstance.getCreditMemo).not.toHaveBeenCalled();
+    });
+
+    it('line_items sets optional header fields individually', async () => {
+      const current = {
+        Id: '123',
+        SyncToken: '0',
+        Line: [
+          {
+            Id: '1',
+            DetailType: 'SalesItemLineDetail',
+            Amount: 5,
+            SalesItemLineDetail: { ItemRef: { value: 'item-1' }, Qty: 1, UnitPrice: 5 },
+          },
+        ],
+      };
+      mockQuickBooksInstance.getCreditMemo.mockImplementation((_id: any, cb: any) => cb(null, current));
+      mockQuickBooksInstance.getPreferences.mockImplementation((cb: any) => cb(null, {}));
+      mockQuickBooksInstance.updateCreditMemo.mockImplementation((payload: any, cb: any) => cb(null, payload));
+
+      await updateQuickbooksCreditMemo({
+        id: '123',
+        sync_token: '0',
+        customer_ref: 'cust-1',
+        line_items: [{ id: '1', qty: 1 }],
+      });
+      await updateQuickbooksCreditMemo({
+        id: '123',
+        sync_token: '0',
+        private_note: 'n',
+        line_items: [{ id: '1', qty: 1 }],
+      });
+      await updateQuickbooksCreditMemo({
+        id: '123',
+        sync_token: '0',
+        doc_number: 'CM-9',
+        line_items: [{ id: '1', qty: 1 }],
+      });
+      expect(mockQuickBooksInstance.updateCreditMemo).toHaveBeenCalled();
+    });
+
+    it('line_items success without optional header fields or warnings', async () => {
+      const current = {
+        Id: '123',
+        SyncToken: '0',
+        Line: [
+          {
+            Id: '1',
+            DetailType: 'SalesItemLineDetail',
+            Amount: 5,
+            SalesItemLineDetail: { ItemRef: { value: 'item-1' }, Qty: 1, UnitPrice: 5 },
+          },
+        ],
+      };
+      mockQuickBooksInstance.getCreditMemo.mockImplementation((_id: any, cb: any) => cb(null, current));
+      mockQuickBooksInstance.getPreferences.mockImplementation((cb: any) => cb(null, {}));
+      mockQuickBooksInstance.updateCreditMemo.mockImplementation((payload: any, cb: any) => cb(null, payload));
+      const result = await updateQuickbooksCreditMemo({
+        id: '123',
+        sync_token: '0',
+        line_items: [{ id: '1', description: 'ok' }],
+      });
+      expect(result.isError).toBe(false);
+      expect((result.result as any)._warning).toBeUndefined();
+    });
+
+    it('line_items path read-merge-writes lines', async () => {
+      const current = {
+        Id: '123',
+        SyncToken: '0',
+        Line: [
+          {
+            Id: '1',
+            DetailType: 'SalesItemLineDetail',
+            Amount: 10,
+            SalesItemLineDetail: { ItemRef: { value: 'item-1' }, Qty: 2, UnitPrice: 5, ClassRef: { value: '682828' } },
+          },
+        ],
+      };
+      mockQuickBooksInstance.getCreditMemo.mockImplementation((_id: any, cb: any) => cb(null, current));
+      mockQuickBooksInstance.getPreferences.mockImplementation((cb: any) => cb(null, {}));
+      let sent: any;
+      mockQuickBooksInstance.updateCreditMemo.mockImplementation((payload: any, cb: any) => {
+        sent = payload;
+        cb(null, payload);
+      });
+
+      const result = await updateQuickbooksCreditMemo({
+        id: '123',
+        sync_token: '0',
+        line_items: [{ id: '1', qty: 3 }],
+      });
+
+      expect(result.isError).toBe(false);
+      expect(sent.Line[0].SalesItemLineDetail.Qty).toBe(3);
+    });
+
+    it('invalid class_ref and merge errors skip update', async () => {
+      const current = {
+        Id: '123',
+        SyncToken: '0',
+        Line: [
+          {
+            Id: '1',
+            DetailType: 'SalesItemLineDetail',
+            Amount: 10,
+            SalesItemLineDetail: { ItemRef: { value: 'item-1' }, Qty: 2, UnitPrice: 5 },
+          },
+        ],
+      };
+      mockQuickBooksInstance.getCreditMemo.mockImplementation((_id: any, cb: any) => cb(null, current));
+
+      const badClass = await updateQuickbooksCreditMemo({
+        id: '123',
+        sync_token: '0',
+        line_items: [{ id: '1', class_ref: 'name' }],
+      });
+      expect(badClass.isError).toBe(true);
+
+      const badMerge = await updateQuickbooksCreditMemo({
+        id: '123',
+        sync_token: '0',
+        line_items: [{ id: '9', qty: 1 }],
+      });
+      expect(badMerge.isError).toBe(true);
+      expect(mockQuickBooksInstance.updateCreditMemo).not.toHaveBeenCalled();
+    });
+
+    it('line_items with header fields and post-write ClassRef error', async () => {
+      const current = {
+        Id: '123',
+        SyncToken: '0',
+        Line: [
+          {
+            Id: '1',
+            DetailType: 'SalesItemLineDetail',
+            Amount: 10,
+            SalesItemLineDetail: {
+              ItemRef: { value: 'item-1' },
+              Qty: 2,
+              UnitPrice: 5,
+              ClassRef: { value: '682828' },
+            },
+          },
+        ],
+      };
+      mockQuickBooksInstance.getCreditMemo.mockImplementation((_id: any, cb: any) => cb(null, current));
+      mockQuickBooksInstance.getPreferences.mockImplementation((cb: any) => cb(null, {}));
+      mockQuickBooksInstance.updateCreditMemo.mockImplementation((payload: any, cb: any) =>
+        cb(null, {
+          ...payload,
+          Line: [{ Id: '1', DetailType: 'SalesItemLineDetail', SalesItemLineDetail: { ItemRef: { value: 'item-1' } } }],
+        })
+      );
+
+      const result = await updateQuickbooksCreditMemo({
+        id: '123',
+        sync_token: '0',
+        customer_ref: 'cust-1',
+        private_note: 'n',
+        doc_number: 'CM-3',
+        line_items: [{ id: '1', qty: 2 }],
+      });
+      expect(result.isError).toBe(true);
+    });
+
+    it('line_items AST warning returns success with _warning', async () => {
+      const current = {
+        Id: '123',
+        SyncToken: '0',
+        Line: [
+          {
+            Id: '1',
+            DetailType: 'SalesItemLineDetail',
+            Amount: 10,
+            SalesItemLineDetail: { ItemRef: { value: 'item-1' }, Qty: 2, UnitPrice: 5, TaxCodeRef: { value: 'NON' } },
+          },
+        ],
+      };
+      mockQuickBooksInstance.getCreditMemo.mockImplementation((_id: any, cb: any) => cb(null, current));
+      mockQuickBooksInstance.getPreferences.mockImplementation((cb: any) =>
+        cb(null, { TaxPrefs: { PartnerTaxEnabled: true } })
+      );
+      mockQuickBooksInstance.updateCreditMemo.mockImplementation((_payload: any, cb: any) =>
+        cb(null, {
+          Line: [{ Id: '1', DetailType: 'SalesItemLineDetail', SalesItemLineDetail: { ItemRef: { value: 'item-1' } } }],
+        })
+      );
+      const result = await updateQuickbooksCreditMemo({
+        id: '123',
+        sync_token: '0',
+        line_items: [{ id: '1', qty: 2 }],
+      });
+      expect(result.isError).toBe(false);
+      expect((result.result as any)._warning).toBeDefined();
+    });
+
+    it('line_items when read returns no Line uses empty base lines for new items', async () => {
+      mockQuickBooksInstance.getCreditMemo.mockImplementation((_id: any, cb: any) =>
+        cb(null, { Id: '123', SyncToken: '0' })
+      );
+      mockQuickBooksInstance.getPreferences.mockImplementation((cb: any) => cb(null, {}));
+      mockQuickBooksInstance.updateCreditMemo.mockImplementation((payload: any, cb: any) => cb(null, payload));
+      const result = await updateQuickbooksCreditMemo({
+        id: '123',
+        sync_token: '0',
+        line_items: [{ item_ref: 'item-1', qty: 1, unit_price: 3 }],
+      });
+      expect(result.isError).toBe(false);
+    });
+
+    it('line_items update API error', async () => {
+      const current = {
+        Id: '123',
+        SyncToken: '0',
+        Line: [
+          {
+            Id: '1',
+            DetailType: 'SalesItemLineDetail',
+            Amount: 5,
+            SalesItemLineDetail: { ItemRef: { value: 'item-1' }, Qty: 1, UnitPrice: 5 },
+          },
+        ],
+      };
+      mockQuickBooksInstance.getCreditMemo.mockImplementation((_id: any, cb: any) => cb(null, current));
+      mockQuickBooksInstance.getPreferences.mockImplementation((cb: any) => cb(null, {}));
+      mockQuickBooksInstance.updateCreditMemo.mockImplementation((_p: any, cb: any) => cb(new Error('write'), null));
+      const result = await updateQuickbooksCreditMemo({
+        id: '123',
+        sync_token: '0',
+        line_items: [{ id: '1', qty: 2 }],
+      });
+      expect(result.isError).toBe(true);
+    });
+
+    it('getCreditMemo failure on line_items path', async () => {
+      mockQuickBooksInstance.getCreditMemo.mockImplementation((_id: any, cb: any) => cb(new Error('read'), null));
+      const result = await updateQuickbooksCreditMemo({
+        id: '123',
+        sync_token: '0',
+        line_items: [{ id: '1', qty: 1 }],
+      });
+      expect(result.isError).toBe(true);
+    });
+
+    it('stale sync_token skips update', async () => {
+      mockQuickBooksInstance.getCreditMemo.mockImplementation((_id: any, cb: any) =>
+        cb(null, { Id: '123', SyncToken: '9', Line: [] })
+      );
+      const result = await updateQuickbooksCreditMemo({
+        id: '123',
+        sync_token: '0',
+        line_items: [{ item_ref: 'item-1', qty: 1, unit_price: 1 }],
+      });
+      expect(result.isError).toBe(true);
+      expect(mockQuickBooksInstance.updateCreditMemo).not.toHaveBeenCalled();
+    });
   });
 
   describe('deleteQuickbooksCreditMemo', () => {
