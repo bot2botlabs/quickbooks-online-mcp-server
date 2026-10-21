@@ -111,7 +111,7 @@ export function RegisterTool<T extends z.ZodType<any, any>>(
   if (isToolDisabled(toolDefinition.name)) return;
 
   const known = knownParamKeys(toolDefinition.schema);
-  const paramsSchema = deepPermissiveSchema(toolDefinition.schema);
+  const paramsSchema = permissiveParamsSchema(deepPermissiveSchema(toolDefinition.schema));
   const baseHandler = toolDefinition.handler as unknown as (...a: any[]) => Promise<any>;
 
   const handler = (async (...a: any[]) => {

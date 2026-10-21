@@ -84,32 +84,60 @@ export function deepPermissiveSchema<T extends z.ZodTypeAny>(schema: T): T {
       if (isPassthroughObject(schema)) return schema;
       const shape = objectShape(schema);
       if (!shape) return schema;
+      let changed = false;
       const mapped: Record<string, z.ZodTypeAny> = {};
       for (const key of Object.keys(shape)) {
-        mapped[key] = deepPermissiveSchema(shape[key]!);
+        const next = deepPermissiveSchema(shape[key]!);
+        mapped[key] = next;
+        if (next !== shape[key]) changed = true;
       }
-      return (schema as unknown as z.ZodObject<any>).extend(mapped).passthrough() as unknown as T;
+      const obj = schema as unknown as z.ZodObject<any>;
+      if (!changed) return obj.passthrough() as unknown as T;
+      return obj.extend(mapped).passthrough() as unknown as T;
     }
-    case "ZodArray":
-      return z.array(
-        deepPermissiveSchema((schema as unknown as z.ZodArray<z.ZodTypeAny>).element)
-      ) as unknown as T;
-    case "ZodOptional":
-      return deepPermissiveSchema(
-        (schema as unknown as z.ZodOptional<z.ZodTypeAny>).unwrap()
-      ).optional() as unknown as T;
-    case "ZodNullable":
-      return deepPermissiveSchema(
-        (schema as unknown as z.ZodNullable<z.ZodTypeAny>).unwrap()
-      ).nullable() as unknown as T;
+    case "ZodArray": {
+      const def = zodDef(schema) as unknown as z.ZodArrayDef;
+      const element = (schema as unknown as z.ZodArray<z.ZodTypeAny>).element;
+      const inner = deepPermissiveSchema(element);
+      if (inner === element) return schema;
+      return new z.ZodArray({
+        ...def,
+        type: inner,
+      }) as unknown as T;
+    }
+    case "ZodOptional": {
+      const def = zodDef(schema) as unknown as z.ZodOptionalDef;
+      const unwrapped = (schema as unknown as z.ZodOptional<z.ZodTypeAny>).unwrap();
+      const inner = deepPermissiveSchema(unwrapped);
+      if (inner === unwrapped) return schema;
+      return new z.ZodOptional({
+        ...def,
+        innerType: inner,
+      }) as unknown as T;
+    }
+    case "ZodNullable": {
+      const def = zodDef(schema) as unknown as z.ZodNullableDef;
+      const unwrapped = (schema as unknown as z.ZodNullable<z.ZodTypeAny>).unwrap();
+      const inner = deepPermissiveSchema(unwrapped);
+      if (inner === unwrapped) return schema;
+      return new z.ZodNullable({
+        ...def,
+        innerType: inner,
+      }) as unknown as T;
+    }
     case "ZodDefault": {
       const def = zodDef(schema) as unknown as z.ZodDefaultDef;
       const inner = deepPermissiveSchema(def.innerType as z.ZodTypeAny);
-      return inner.default(def.defaultValue()) as unknown as T;
+      if (inner === def.innerType) return schema;
+      return new z.ZodDefault({
+        ...def,
+        innerType: inner,
+      }) as unknown as T;
     }
     case "ZodEffects": {
       const def = zodDef(schema) as unknown as z.ZodEffectsDef;
       const inner = deepPermissiveSchema(def.schema as z.ZodTypeAny);
+      if (inner === def.schema) return schema;
       return new z.ZodEffects({
         ...def,
         schema: inner,
@@ -309,7 +337,7 @@ export function nestedUnsupportedWarning(
     .map(([loc, keys]) => `Supported in ${loc}: ${keys.join(", ")}.`);
 
   if (nestedLines.length > 0) {
-    message += ` ${nestedLines.join(" ")}`;
+    message += `\n${nestedLines.join("\n")}`;
   }
 
   return message;

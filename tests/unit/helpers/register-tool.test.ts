@@ -196,6 +196,7 @@ describe("unsupported parameter reporting", () => {
     });
     expect(result.content[0].text).toContain("line_items[0].class_ref");
     expect(result.content[0].text).toContain("Supported in line_items[]:");
+    expect(result.content[0].text).toContain("\nSupported in line_items[]:");
     expect(result.content[1].text).toBe("ok");
   });
 

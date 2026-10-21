@@ -264,7 +264,7 @@ describe("nestedUnsupportedWarning", () => {
       params
     )!;
     expect(warning).toContain("ship_date, line_items[0].class_ref");
-    expect(warning).toContain("Supported in line_items[]: item_ref, qty, unit_price.");
+    expect(warning).toContain("\nSupported in line_items[]: item_ref, qty, unit_price.");
   });
 
   it("builds nested warnings without Supported-in lines for non-array nesting", () => {
@@ -345,15 +345,54 @@ describe("deepPermissiveSchema", () => {
     expect(deepPermissiveSchema(throwingShape)).toBe(throwingShape);
   });
 
+  it("returns wrapper schemas unchanged when inner shape is unchanged", () => {
+    const tags = z.array(z.string()).min(1).describe("Tags");
+    const billEmail = z.string().optional().describe("Billing email");
+    const withDefault = z.string().default("x");
+    const withEffect = z.string().superRefine((v) => v.length > 0);
+    expect(deepPermissiveSchema(tags)).toBe(tags);
+    expect(deepPermissiveSchema(billEmail)).toBe(billEmail);
+    expect(deepPermissiveSchema(withDefault)).toBe(withDefault);
+    expect(deepPermissiveSchema(withEffect)).toBe(withEffect);
+  });
+
+  it("rebuilds nullable and default wrappers when inner objects gain passthrough", () => {
+    const nullableInner = z.object({ a: z.string() }).nullable().describe("payload");
+    const defaultInner = z.object({ a: z.string() }).default({ a: "x" });
+    const nullable = deepPermissiveSchema(nullableInner);
+    const withDefault = deepPermissiveSchema(defaultInner);
+    expect(nullable).not.toBe(nullableInner);
+    expect(withDefault).not.toBe(defaultInner);
+    expect(nullable.description).toBe("payload");
+    expect(
+      (nullable as z.ZodNullable<z.ZodTypeAny>).unwrap().parse({ a: "1", extra: 2 } as any).extra
+    ).toBe(2);
+  });
+
+  it("preserves min length and descriptions on arrays after rebuild", () => {
+    const lineItems = z
+      .array(z.object({ item_ref: z.string().describe("Item Id") }))
+      .min(1)
+      .describe("Lines");
+    const schema = z.object({ customer_ref: z.string(), line_items: lineItems });
+    const rebuilt = deepPermissiveSchema(schema);
+    expect(() => rebuilt.parse({ customer_ref: "1", line_items: [] })).toThrow(/at least 1 element/i);
+    const field = (rebuilt as z.ZodObject<any>).shape.line_items;
+    expect(field.description).toBe("Lines");
+    expect((field as z.ZodArray<any>)._def.minLength?.value).toBe(1);
+  });
+
   it("preserves descriptions and required arrays in tools/list JSON (ignoring additionalProperties)", async () => {
     const base = z.object({
       customer_ref: z.string().describe("Customer Id"),
-      line_items: z.array(
-        z.object({
-          item_ref: z.string().describe("Item Id"),
-          qty: z.number(),
-        })
-      ),
+      line_items: z
+        .array(
+          z.object({
+            item_ref: z.string().describe("Item Id"),
+            qty: z.number(),
+          })
+        )
+        .min(1),
     });
 
     const serverA = new McpServer({ name: "a", version: "0" });
