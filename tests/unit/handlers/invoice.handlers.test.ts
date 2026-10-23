@@ -131,6 +131,9 @@ describe('Invoice Handlers', () => {
 
       expect(result.isError).toBe(false);
       expect((result.result as any)._warning).toContain('did not apply class_ref on line(s) 1');
+      expect((result.result as any)._warning).toContain(
+        'The transaction already exists, so do not retry the create; read or update that record (Id 169) instead.'
+      );
       expect(mockQuickBooksInstance.getPreferences).toHaveBeenCalledTimes(1);
     });
 

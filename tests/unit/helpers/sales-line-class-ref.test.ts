@@ -156,6 +156,7 @@ describe('sales-line-class-ref helpers', () => {
 
       expect(result._warning).toBe(
         'Warning: QuickBooks saved this transaction but did not apply class_ref on line(s) 1. ' +
+          'The transaction already exists, so do not retry the create; read or update that record (Id 169) instead. ' +
           'Class tracking appears to be off or unavailable on this company ' +
           '(QuickBooks Plus or Advanced with class tracking enabled is required). ' +
           'Line-level class_ref is not applicable.'
@@ -175,6 +176,7 @@ describe('sales-line-class-ref helpers', () => {
 
       expect(result._warning).toBe(
         'Warning: QuickBooks saved this transaction but did not apply class_ref on line(s) 1. ' +
+          'The transaction already exists, so do not retry the create; read or update that record (Id 169) instead. ' +
           'Line-level class tracking may be disabled or misconfigured in this company.'
       );
     });
@@ -193,6 +195,7 @@ describe('sales-line-class-ref helpers', () => {
 
       expect(result._warning).toBe(
         'Warning: QuickBooks saved this transaction but did not apply class_ref on line(s) 1. ' +
+          'The transaction already exists, so do not retry the create; read or update that record (Id 169) instead. ' +
           'Line-level class tracking may be disabled or misconfigured in this company.'
       );
     });
@@ -217,6 +220,11 @@ describe('sales-line-class-ref helpers', () => {
       )) as { _warning: string };
 
       expect(result._warning).toContain('line(s) 1, 3');
+      // No Id on the saved entity: still tell the caller not to retry the create.
+      expect(result._warning).toContain(
+        'The transaction already exists, so do not retry the create; read or update that record instead.'
+      );
+      expect(result._warning).not.toContain('(Id ');
     });
   });
 

@@ -139,8 +139,13 @@ export async function applySalesCreateClassRefWarning(
   }
 
   const lineList = mismatched.join(", ");
+  const savedId = (created as { Id?: unknown }).Id;
+  const recordRef = savedId != null ? `that record (Id ${String(savedId)})` : "that record";
+  // Callers may react to _warning automatically, so state plainly that the
+  // create already succeeded and must not be retried (a retry would duplicate it).
   const warning =
-    `Warning: QuickBooks saved this transaction but did not apply class_ref on line(s) ${lineList}. ${suffix}`;
+    `Warning: QuickBooks saved this transaction but did not apply class_ref on line(s) ${lineList}. ` +
+    `The transaction already exists, so do not retry the create; read or update ${recordRef} instead. ${suffix}`;
 
   return { ...(created as object), _warning: warning };
 }
